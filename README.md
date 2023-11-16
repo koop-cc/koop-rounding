@@ -32,4 +32,4 @@ console.log(rounded)
 
 [Demo App](//koop-cc.github.io/koop-rounding)
 
-There is a vue3 example app in the `example` folder. Read [README](/koop-cc/koop-rounding/tree/main/example/README.md) in the subfolder for instructions on how to install and compile. Running `npm run build` in the main branch subsequently also runs `npm run build --prefix example` and updates the example. The demo app is automatically deployed on GitHub pages after the build process (see `.github/workflows/deploy.yml`)
+There is a vue3 example app in the `example` folder. Read [README](//github.com/koop-cc/koop-rounding/tree/main/example/README.md) in the subfolder for instructions on how to install and compile. Running `npm run build` in the main branch subsequently also runs `npm run build --prefix example` and updates the example. The demo app is automatically deployed on GitHub pages after the build process (see `.github/workflows/deploy.yml`)
