@@ -4,6 +4,7 @@
   "description": "Rounding Algorithm for koop.cc",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "composite": true,
   "files": [
     "/dist"
   ],  

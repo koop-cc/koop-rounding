@@ -22,7 +22,10 @@ const orders_1 = [
 ]
 
 const r = new koop_rounding(bundle, orders_1);
-const rounded = r.round(0.5, 0.5)
+const rounded = r.round({
+    min_threshold: 0.5, 
+    threshold: 0.5
+})
 
 console.log(rounded)
 ```

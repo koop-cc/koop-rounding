@@ -87,3 +87,24 @@ export interface roundedBundle {
    */
   error?: string;
 }
+
+/**
+ * Options for Rounding Algorithm
+ */
+export interface roundingOptions {
+  /**
+   * Threshold for rounding up to next bundle count.
+   * 0.5 means: upper 50% -> plus one bundle, 
+   * lower 50% -> minus one bundle.
+   * Default: 0.6
+   */
+  threshold?: number,
+
+  /**
+   * Threshold for rounding up the first bundle.
+   * 1.0 means the total offers must at least
+   * the size of one bundle.
+   * Default: 0.75
+   */
+  min_threshold?: number
+}

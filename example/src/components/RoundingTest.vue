@@ -45,7 +45,10 @@ const doRound = () => {
   error = null
   const r = new koop_rounding(bundle.value, members.value)
   try {
-    rounded.value = r.round(min_threshold.value * 1, threshold.value * 1)
+    rounded.value = r.round({
+      min_threshold: min_threshold.value * 1, 
+      threshold: threshold.value * 1
+    })
   } catch (e:any) {
     error = e
   }

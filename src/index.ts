@@ -1,4 +1,4 @@
-import type { bundleType, userValue, roundedBundle } from './index.d'
+import type { bundleType, userValue, roundedBundle, roundingOptions } from './index.d'
 
 export default class koop_rounding {
 
@@ -34,9 +34,10 @@ export default class koop_rounding {
   }
 
   round = (
-    min_threshold: number,
-    threshold: number
+    options: roundingOptions
   ): roundedBundle => {
+    const min_threshold = options.min_threshold || 0.75
+    const threshold = options.threshold || 0.6
     const unit_count = this.bundle.unit_count || 1;
     const unit_size = this.bundle.unit_size;
     const step_size = this.bundle.step_size || unit_size;
@@ -140,7 +141,7 @@ export default class koop_rounding {
           //console.log(scale_factor)
           const allowed_keys:number[] = [];
           user_values.forEach((v, index) => {
-            if ((diff === 1 || v.value_scaled > 1) && v.locked !== true) {
+            if ((diff === 1 || v.value_scaled >= 1) && v.locked !== true) {
               allowed_keys.push(index);
             }
           });

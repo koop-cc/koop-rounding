@@ -23,7 +23,9 @@ class koop_rounding {
         this.bundle = bundle;
         this.orders = orders;
     }
-    round = (min_threshold, threshold) => {
+    round = (options) => {
+        const min_threshold = options.min_threshold || 0.75;
+        const threshold = options.threshold || 0.6;
         const unit_count = this.bundle.unit_count || 1;
         const unit_size = this.bundle.unit_size;
         const step_size = this.bundle.step_size || unit_size;
@@ -103,7 +105,7 @@ class koop_rounding {
                     //console.log(scale_factor)
                     const allowed_keys = [];
                     user_values.forEach((v, index) => {
-                        if ((diff === 1 || v.value_scaled > 1) && v.locked !== true) {
+                        if ((diff === 1 || v.value_scaled >= 1) && v.locked !== true) {
                             allowed_keys.push(index);
                         }
                     });
