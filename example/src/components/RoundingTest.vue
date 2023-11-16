@@ -66,6 +66,7 @@ doRound()
       <td colspan="2">Verkaufseinheit von {{ bundle.unit_count }} Einheiten à {{ bundle.unit_size }} (kg/g)</td>
     </tr> 
   </table>
+  
   <table style="float: right">
     <thead><tr>
       <td>Members</td>
