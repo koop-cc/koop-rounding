@@ -16,10 +16,20 @@ const bundle = ref({
 
 var error = ref(null as any)
 
-var members = ref([{
-  id: "Member 1",
-  value: 500
-}] as userValue[])
+var members = ref([
+  {
+    id: "Hans",
+    value: 400
+  },
+  {
+    id: "Petra",
+    value: 400
+  },
+  {
+    id: "Franz",
+    value: 100
+  }
+] as userValue[])
 
 var rounded = ref({} as roundedBundle)
 
