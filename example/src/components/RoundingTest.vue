@@ -63,7 +63,7 @@ doRound()
       <td><input type="number" v-model="bundle.step_size"></td>
     </tr> 
     <tr>
-      <td colspan="2">Verkaufseinheit von {{ bundle.unit_count }} Einheiten à {{ bundle.unit_size }} (kg/g/...)</td>
+      <td colspan="2">Verkaufseinheit von {{ bundle.unit_count }} Einheiten à {{ bundle.unit_size }} (kg/g)</td>
     </tr> 
     
   </table>
