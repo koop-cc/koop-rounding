@@ -1,0 +1,19 @@
+name: Deploy to gh-pages
+
+on:
+  push:
+    branches:
+      - main # Change this to the branch you want to trigger the action on
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Push subtree to gh-pages
+        run: |
+          git checkout main
+          git subtree split --prefix example/dist -b gh-pages-temp
+          git push -f origin gh-pages-temp:gh-pages
