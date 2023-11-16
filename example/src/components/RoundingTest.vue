@@ -4,6 +4,9 @@ import { ref, watch } from 'vue'
 import type { bundleType, userValue, roundedBundle } from '@library/index.d'
 import koop_rounding from '@library/index'
 
+const threshold = ref(0.5 as number)
+
+const min_threshold = ref(0.5 as number)
 
 const bundle = ref({
   unit_count: 1,
@@ -24,6 +27,16 @@ watch(bundle, (val) => {
   doRound()
 }, {deep: true})
 
+watch(min_threshold, (val) => {
+  doRound()
+}, {deep: true})
+
+
+watch(threshold, (val) => {
+  doRound()
+}, {deep: true})
+
+
 watch(members, (val) => {
   doRound()
 }, {deep: true})
@@ -32,7 +45,7 @@ const doRound = () => {
   error = null
   const r = new koop_rounding(bundle.value, members.value)
   try {
-    rounded.value = r.round(0.5)
+    rounded.value = r.round(min_threshold.value * 1, threshold.value * 1)
   } catch (e:any) {
     error = e
   }
@@ -46,57 +59,109 @@ doRound()
   <h1>
     Koop.cc: Rounding Test
   </h1>
-  <table style="float: left">
-    <thead><tr>
-      <td colspan=2>Bundle</td>
-    </tr></thead>
-    <tr>
-      <td>Units in Bundle</td>
-      <td><input type="number" v-model="bundle.unit_count"></td>
-    </tr>
-    <tr>
-      <td>Unit Size</td>
-      <td><input type="number" v-model="bundle.unit_size"></td>
-    </tr>
-    <tr>
-      <td>Step Size</td>
-      <td><input type="number" v-model="bundle.step_size"></td>
-    </tr> 
-    <tr>
-      <td colspan="2">Verkaufseinheit von {{ bundle.unit_count }} Einheiten à {{ bundle.unit_size }} (kg/g)</td>
-    </tr> 
-  </table>
-  
-  <table style="float: right">
-    <thead><tr>
-      <td>Members</td>
-      <td>Order</td>
-      <td>Locked</td>
-    </tr></thead>
-    <tr :key="member.id" v-for="member in members">
-      <td>
-        <input v-model="member.id">
-      </td>
-      <td>
-        <input type="number" v-model="member.value">
-      </td>
-      <td>
-        <input type="checkbox" v-model="member.locked">
-      </td>      
-    </tr>
-    <tfoot>
+  <header style="margin-bottom: 2rem;">
+    <ol>
+      <li>Anzahl Bundles der Bestellung wird ermittelt</li>
+      <li>Bundles &lt; 1 ? Wenn &gt; min_threshold, aufrunden auf 1</li>
+      <li>Bundles &gt; 1 ? Wenn &gt; threshold, aufrunden auf nächst höheres Bundle, sonst abrunden</li>
+      <li>Werte Testen: Alle Offers müssen teilbar sein durch step_size</li>
+      <li>Loop Starten:
+        <ol>
+          <li>Alle Bestellungen zusammenzählen</li>
+          <li>im ersten Durchgang:
+            <ol>
+              <li>Wenn Total > Anzahl Bundles * bundle_size, dann zufälligen (unlocked) Wert nehmen und um 1 Schritt reduzieren</li>
+              <li>Wenn Total &lt; Anzahl Bundles * bundle_size, dann zufälligen (unlocked) Wert nehmen und um 1 Schritt erhöhen</li>
+            </ol>
+          </li>
+          <li>in den folgenden Durchgängen:
+            <ol>
+              <li>Wenn Total > Anzahl Bundles * bundle_size, dann nächsten (oder ersten) (unlocked) Wert nehmen und um 1 Schritt reduzieren</li>
+              <li>Wenn Total &lt; Anzahl Bundles * bundle_size, dann nächsten (oder ersten) (unlocked) Wert nehmen und um 1 Schritt erhöhen</li>
+            </ol>
+          </li>          
+          <li>
+            Test:
+            <ol>
+              <li>Repeat: Wenn Total &lt;&gt; Anzahl Bundles * bundle_size, wiederholen.</li>
+              <li>OK: Wenn Total == Anzahl Bundles * bundle_size, abschliessen.</li>
+              <li>Error: Falls keine Werte vorhanden sind, die gerundet werden können, oder falls ein Wert auf -1 fällt, abbrechen.</li>
+            </ol>
+          </li>
+        </ol>
+      </li>
+    </ol>
+  </header>
+  <section style="padding: 2rem; border: 1px solid; display: flex; justify-content: space-evenly;">
+    <table>
+      <thead><tr>
+        <td colspan=2>Bundle von <i>{{ bundle.unit_count }}</i> Einheiten à <i>{{ bundle.unit_size }}</i> (kg/g)</td>
+      </tr></thead>
       <tr>
-        <td><button @click="members.push({id: `Member ${members.length + 1}`, value: bundle.step_size * 1})">Add Member</button></td>
-        <td><button @click="members.pop()">Remove Member</button></td>
+        <td>Units in Bundle</td>
+        <td><input type="number" v-model="bundle.unit_count"></td>
       </tr>
-    </tfoot>
-  </table>  
+      <tr>
+        <td>Unit Size</td>
+        <td><input type="number" v-model="bundle.unit_size"></td>
+      </tr>
+      <tr>
+        <td>Step Size</td>
+        <td><input type="number" v-model="bundle.step_size"></td>
+      </tr> 
+      <tr>
+        <td>Threshold*</td>
+        <td><input v-model="threshold"></td>
+      </tr>
+      <tr>
+        <td>Threshold min.*</td>
+        <td><input v-model="min_threshold"></td>
+      </tr>
+      <tr style="font-size: 75%">
+        <td>threshold</td>
+        <td>
+          Grenzwert zum Aufrunden<br>
+          auf das nächste Bundle
+        </td>
+      </tr>
+      <tr style="font-size: 75%">
+        <td>min_Threshold</td>
+        <td>
+          Grenzwert zum aufrunden<br>
+          auf das erste Bundle<br>
+          (default 0.5 * bundle size)
+        </td>
+      </tr>
 
+    </table>
+    <table>
+      <thead><tr>
+        <td>Members</td>
+        <td>Order</td>
+        <td>Locked</td>
+      </tr></thead>
+      <tr :key="member.id" v-for="member in members">
+        <td>
+          <input v-model="member.id">
+        </td>
+        <td>
+          <input type="number" v-model="member.value">
+        </td>
+        <td>
+          <input type="checkbox" v-model="member.locked">
+        </td>      
+      </tr>
+      <tfoot>
+        <tr>
+          <td><button @click="members.push({id: `Member ${members.length + 1}`, value: bundle.step_size * 1})">Add Member</button></td>
+          <td><button @click="members.pop()">Remove Member</button></td>
+        </tr>
+      </tfoot>
+    </table>  
+    </section>
+  <pre v-if="rounded.error" style="clear: both; color: red">{{ rounded.error }}</pre>
   
-
-  <pre style="clear: both; color: red" v-if="error">{{ error }}</pre>
-
-  <div style="clear: both;" v-else>
+  <div style="clear: both;">
     <h2>Orders:</h2>
     <br>
     <table style="width: 100%; border-collapse: collapse; box-shadow: none;">

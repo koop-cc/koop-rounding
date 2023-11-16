@@ -81,4 +81,9 @@ export interface roundedBundle {
    * to find a correct result
    */
   iterations: number;
+
+  /**
+   * Error: false or string 
+   */
+  error?: string;
 }
