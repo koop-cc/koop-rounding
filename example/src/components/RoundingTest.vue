@@ -4,9 +4,9 @@ import { ref, watch } from 'vue'
 import type { bundleType, userValue, roundedBundle } from '@library/index.d'
 import koop_rounding from '@library/index'
 
-const threshold = ref(0.5 as number)
+const threshold = ref(0.6 as number)
 
-const min_threshold = ref(0.5 as number)
+const min_threshold = ref(0.75 as number)
 
 const bundle = ref({
   unit_count: 1,
