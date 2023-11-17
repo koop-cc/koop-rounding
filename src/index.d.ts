@@ -14,9 +14,18 @@ export interface bundleType {
 
   /**
    * step size to increase or decrease a ordered amount.
-   * must be a divider of unit_size
+   * must be a divider of unit_size. defaults to unit_size
+   * if omitted.
    */
   step_size: number;
+  
+  /**
+   * step size to round the results.
+   * must be a divider of step_size and smaller or
+   * equal to step_size. defaults to unit_size
+   * if omitted.
+   */
+  rounding_step_size?: number;
 }
 
 /**

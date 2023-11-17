@@ -29,6 +29,7 @@ class koop_rounding {
         const unit_count = this.bundle.unit_count || 1;
         const unit_size = this.bundle.unit_size;
         const step_size = this.bundle.step_size || unit_size;
+        const rounding_step_size = this.bundle.rounding_step_size || unit_size;
         const bucket_size = unit_count * unit_size;
         var iterations = 0;
         var error = false;
@@ -38,21 +39,29 @@ class koop_rounding {
         var bundles_count = 0;
         var scaled_values = [];
         try {
-            // Check if the bucket_size is a multiple of the step_size
+            if (rounding_step_size > step_size) {
+                throw new Error("rounding_step_size must not be greater than step_size");
+            }
+            if (step_size % rounding_step_size !== 0) {
+                throw new Error("rounding_step_size must be a divider of step_size");
+            }
             if (unit_size % step_size !== 0) {
                 throw new Error("step_size must be a divider of unit_size");
+            }
+            if (unit_size % rounding_step_size !== 0) {
+                throw new Error("rounding_step_size must be a divider of unit_size");
             }
             if (bucket_size === 0) {
                 throw new Error("bucket_size must be greater than 0");
             }
             // Adjust the step_size to 1 and the bucket_size acordingly
-            const bucket_size_scaled = bucket_size / step_size;
+            const bucket_size_scaled = bucket_size / rounding_step_size;
             const scale_factor = bucket_size / bucket_size_scaled;
             // Reduce the user_values by scaling each value by the scale_factor
             // Adding a weight parameter to the user_values object according to the distance to the next bag_size
             const user_values = this.orders.map((user) => {
                 if (user.value % step_size !== 0) {
-                    throw new Error("a value must be a multiple of step_size");
+                    throw new Error(`the value of ${user.id} must be a multiple of step_size`);
                 }
                 return {
                     id: user.id,
@@ -89,7 +98,7 @@ class koop_rounding {
                     scaled_values[key] = {
                         rounded_value: user.locked === true && bundles_count > 0
                             ? user.value
-                            : user.value_scaled * step_size,
+                            : user.value_scaled * rounding_step_size,
                         value: user.value,
                         weight: user.weight,
                         id: user.id,

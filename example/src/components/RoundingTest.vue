@@ -11,7 +11,8 @@ const min_threshold = ref(0.75 as number)
 const bundle = ref({
   unit_count: 1,
   unit_size: 1000,
-  step_size: 100
+  step_size: 100,
+  rounding_step_size: 10
 } as bundleType)
 
 var error = ref(null as any)
@@ -123,6 +124,10 @@ doRound()
         <td><input type="number" v-model="bundle.step_size"></td>
       </tr> 
       <tr>
+        <td>Rounding Step Size</td>
+        <td><input type="number" v-model="bundle.rounding_step_size"></td>
+      </tr>       
+      <tr>
         <td>Threshold*</td>
         <td><input v-model="threshold"></td>
       </tr>
@@ -174,7 +179,7 @@ doRound()
     </section>
   <pre v-if="rounded.error" style="clear: both; color: red">{{ rounded.error }}</pre>
   
-  <div style="clear: both;">
+  <div class="debug" style="clear: both;">
     <h2>Orders:</h2>
     <br>
     <table style="width: 100%; border-collapse: collapse; box-shadow: none;">
@@ -244,6 +249,11 @@ input[type="number"] {
   font: inherit;
   background: transparent;
   border-bottom: 1px solid;
+}
+
+.debug {
+  font-size: 75;
+  border: 1px solid;
 }
 
 </style>
