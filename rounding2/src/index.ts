@@ -28,19 +28,40 @@ interface Order {
 }
 
 function adjustOrders(orders: Order[], offer: Offer): Order[] {
-    const unitTotalSize = offer.unit_size * offer.unit_count;
-    const totalOrderedQuantity = orders.reduce((sum, order) => sum + order.quantity, 0);
+    const startTime = new Date();
 
-    // Zielmenge aufrunden auf das nächste Vielfache der Verkaufseinheit
+    // Ensure step_size is not smaller than rounding_step_size
+    if (offer.step_size < offer.rounding_step_size) {
+        console.log(
+            "Rounding step size is larger than step size, setting rounding step size to step size."
+        );
+        offer.rounding_step_size = offer.step_size;
+    }
+
+    // Filter out orders with quantity 0
+    const validOrders = orders.filter(order => order.quantity > 0);
+
+    const unitTotalSize = offer.unit_size * offer.unit_count;
+    const totalOrderedQuantity = validOrders.reduce((sum, order) => sum + order.quantity, 0);
+
+    if (totalOrderedQuantity === 0) {
+        console.log('Total ordered quantity is zero, cannot adjust orders.');
+        return orders.map(order => ({
+            ...order,
+            quantity_adjusted: 0
+        }));
+    }
+
+    // Round up target quantity to the next multiple of the unit size
     const adjustedTotalQuantity = Math.ceil(totalOrderedQuantity / unitTotalSize) * unitTotalSize;
 
-    // Skalierungsfaktor berechnen
+    // Calculate scaling factor
     const scaleFactor = adjustedTotalQuantity / totalOrderedQuantity;
 
-    // Initiale Anpassung der Bestellmengen
-    let adjustedOrders = orders.map(order => {
+    // Initial adjustment of order quantities
+    let adjustedOrders = validOrders.map(order => {
         let adjustedQuantity = order.quantity * scaleFactor;
-        adjustedQuantity = Math.round(adjustedQuantity / offer.rounding_step_size) * offer.rounding_step_size;
+        adjustedQuantity = Math.round((adjustedQuantity + Number.EPSILON) / offer.rounding_step_size) * offer.rounding_step_size;
         adjustedQuantity = Math.max(0, adjustedQuantity);
         return {
             ...order,
@@ -48,55 +69,66 @@ function adjustOrders(orders: Order[], offer: Offer): Order[] {
         };
     });
 
-    // Gesamtmenge der angepassten Bestellungen berechnen
+    // Calculate total quantity of adjusted orders
     let currentTotalAdjusted = adjustedOrders.reduce((sum, order) => sum + (order.quantity_adjusted ?? 0), 0);
 
-    // Differenz gleichmäßig auf alle Bestellungen aufteilen
+    // Evenly distribute the remaining difference across all orders
     let remainingDifference = adjustedTotalQuantity - currentTotalAdjusted;
     const orderCount = adjustedOrders.length;
 
     if (remainingDifference !== 0) {
+        let steps = Math.floor(Math.abs(remainingDifference) / offer.rounding_step_size);
         let step = offer.rounding_step_size * Math.sign(remainingDifference);
 
-        for (let i = 0; i < Math.abs(remainingDifference) / offer.rounding_step_size; i++) {
+        for (let i = 0; i < steps; i++) {
             adjustedOrders[i % orderCount].quantity_adjusted! += step;
         }
 
-        adjustedOrders = adjustedOrders.map(order => {
-            let adjustedQuantity = Math.round((order.quantity_adjusted ?? 0) / offer.rounding_step_size) * offer.rounding_step_size;
-            adjustedQuantity = Math.max(0, adjustedQuantity);
-            return {
-                ...order,
-                quantity_adjusted: adjustedQuantity
-            };
-        });
+        currentTotalAdjusted = adjustedOrders.reduce((sum, order) => sum + (order.quantity_adjusted ?? 0), 0);
+        remainingDifference = adjustedTotalQuantity - currentTotalAdjusted;
+
+        if (remainingDifference !== 0) {
+            step = offer.rounding_step_size * Math.sign(remainingDifference);
+            adjustedOrders[0].quantity_adjusted! += step;
+        }
     }
 
-    return adjustedOrders;
+    // Include orders with quantity 0 back into the result with quantity_adjusted set to 0
+    const finalOrders = orders.map(order => {
+        const adjustedOrder = adjustedOrders.find(adjusted => adjusted.order_id === order.order_id);
+        return adjustedOrder ? adjustedOrder : { ...order, quantity_adjusted: 0 };
+    });
+
+    const endTime = new Date();
+    const timeDiff = endTime.getTime() - startTime.getTime(); // Time difference in milliseconds
+
+    console.log(finalOrders);
+    console.log(`Ordered: ${finalOrders.reduce((sum, order) => sum + (order.quantity ?? 0), 0)}`);
+    console.log(`Adjusted: ${finalOrders.reduce((sum, order) => sum + (order.quantity_adjusted ?? 0), 0)}`);
+    console.log(`Time taken: ${timeDiff}ms`);
+
+    return finalOrders;
 }
 
-// Beispiel-Daten
+// Example usage
 const offer: Offer = {
     offer_id: 97,
     unit_count: 1,
     unit_size: 5,
     unit_massunit: UnitMassUnit.Kilogram,
     step_size: 0.5,
-    rounding_step_size: 0.1,
+    rounding_step_size: 0.1, // Changed rounding_step_size to 0.1
     article_nr: "97"
 };
 
 const orders: Order[] = [
-    { order_id: 1, offer_id: 97, quantity: 1, name: 'Hans' },
-    { order_id: 2, offer_id: 97, quantity: 2, name: 'Rike' },
-    { order_id: 3, offer_id: 97, quantity: 1.5, name: 'Sebastian' },
-    { order_id: 3, offer_id: 97, quantity: 1.5, name: 'Bob' },
-    { order_id: 3, offer_id: 97, quantity: 1.0, name: 'Remy' },
-    { order_id: 3, offer_id: 97, quantity: 0.5, name: 'Bruno' }
+    { order_id: 1, offer_id: 97, quantity: 1, name: "Hans" },
+    { order_id: 2, offer_id: 97, quantity: 2, name: "Rike" },
+    { order_id: 3, offer_id: 97, quantity: 1.5, name: "Sebastian" },
+    { order_id: 4, offer_id: 97, quantity: 1.5, name: "Bob" },
+    { order_id: 5, offer_id: 97, quantity: 1.0, name: "Remy" },
+    { order_id: 6, offer_id: 97, quantity: 0.5, name: "Bruno" },
 ];
 
 const adjustedOrders = adjustOrders(orders, offer);
 
-console.log(adjustedOrders);
-console.log("Bestellt: " + adjustedOrders.reduce((sum, order) => sum + (order.quantity ?? 0), 0));
-console.log("Angepasst: " + adjustedOrders.reduce((sum, order) => sum + (order.quantity_adjusted ?? 0), 0));
