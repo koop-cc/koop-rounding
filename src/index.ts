@@ -1,8 +1,8 @@
-import type { bundleType, userValue, roundedBundle, roundingOptions } from './index.d'
+import type { offerType, userValue, roundedOffer, roundingOptions } from './index.d'
 
 export default class koop_rounding {
 
-  private bundle: bundleType
+  private offer: offerType
   private orders: userValue[]
 
 
@@ -28,27 +28,27 @@ export default class koop_rounding {
       .concat(b.filter((x: any) => !a.includes(x)))
   }
 
-  constructor(bundle: bundleType, orders: userValue[]) {
-    this.bundle = bundle
+  constructor(offer: offerType, orders: userValue[]) {
+    this.offer = offer
     this.orders = orders
   }
 
   round = (
     options: roundingOptions
-  ): roundedBundle => {
+  ): roundedOffer => {
     const min_threshold = options.min_threshold || 0.75
     const threshold = options.threshold || 0.6
-    const unit_count = this.bundle.unit_count || 1;
-    const unit_size = this.bundle.unit_size;
-    const step_size = this.bundle.step_size || unit_size;
-    const rounding_step_size = this.bundle.rounding_step_size || unit_size;
+    const unit_count = this.offer.unit_count || 1;
+    const unit_size = this.offer.unit_size;
+    const step_size = this.offer.step_size || unit_size;
+    const rounding_step_size = this.offer.rounding_step_size || unit_size;
     const bucket_size = unit_count * unit_size;
     var iterations: number = 0;
     var error:boolean = false
     var errorMessage:string = ""
     var totalSumUnscaled = 0
     var scaled_total_sum = 0;
-    var bundles_count = 0;
+    var offers_count = 0;
     var scaled_values: userValue[] = [];
 
     try {
@@ -102,21 +102,21 @@ export default class koop_rounding {
       );
 
       // Calculate the amount of buckets needed
-      const bundles_count_raw = totalSum / bucket_size_scaled
-      bundles_count = bundles_count_raw < 1
-                        ? (bundles_count_raw >= min_threshold ? 1 : 0)
-                        : (bundles_count_raw > Math.floor(bundles_count_raw) + threshold
-                          ? Math.ceil(bundles_count_raw)
-                          : Math.floor(bundles_count_raw))
+      const offers_count_raw = totalSum / bucket_size_scaled
+      offers_count = offers_count_raw < 1
+                        ? (offers_count_raw >= min_threshold ? 1 : 0)
+                        : (offers_count_raw > Math.floor(offers_count_raw) + threshold
+                          ? Math.ceil(offers_count_raw)
+                          : Math.floor(offers_count_raw))
 
-      console.log(bundles_count_raw, min_threshold, threshold, bundles_count)
+      console.log(offers_count_raw, min_threshold, threshold, offers_count)
 
-      if (bundles_count === 0) {
-        throw new Error("not enough orders to complete at least one bundle.");
+      if (offers_count === 0) {
+        throw new Error("not enough orders to complete at least one offer.");
       }
-      
+
       // Calculate the rounded total sum
-      let total_sum_original = bundles_count * bucket_size;
+      let total_sum_original = offers_count * bucket_size;
       var random_key: number;
       var pointer: number | undefined;
       do {
@@ -126,7 +126,7 @@ export default class koop_rounding {
           //console.log(user.value);
           scaled_values[key] = {
             rounded_value:
-              user.locked === true && bundles_count > 0
+              user.locked === true && offers_count > 0
                 ? user.value
                 : user.value_scaled * rounding_step_size,
             value: user.value,
@@ -165,7 +165,7 @@ export default class koop_rounding {
               : pointer < allowed_keys.length - 2
                 ? ++pointer
                 : 0
-              
+
           random_key = allowed_keys[pointer];
           user_values[random_key].value_scaled += diff;
           iterations++;
@@ -176,12 +176,12 @@ export default class koop_rounding {
       errorMessage = e.message
     }
 
-    
+
     return {
       iterations: iterations,
       total: totalSumUnscaled,
       rounded_total: scaled_total_sum,
-      bundles: bundles_count,
+      offers: offers_count,
       values: error !== false
         ? this.orders
         : scaled_values,

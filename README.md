@@ -8,22 +8,22 @@ Install koop-rounding as a dependency: `npm install http://github.com/koop-cc/ko
 ```
 import koop_rounding from "koop-rounding"
 
-const bundle = {
+const offer = {
     unit_count: 5,
     unit_size: 1000,
     step_size: 100
 }
-  
+
 const orders_1 = [
-    {id: "Peter", value: 499}, 
-    {id: "Paul", value: 3000}, 
-    {id: "Mary", value: 1220}, 
+    {id: "Peter", value: 499},
+    {id: "Paul", value: 3000},
+    {id: "Mary", value: 1220},
     {id: "John", value: 90, locked: true}
 ]
 
-const r = new koop_rounding(bundle, orders_1);
+const r = new koop_rounding(offer, orders_1);
 const rounded = r.round({
-    min_threshold: 0.5, 
+    min_threshold: 0.5,
     threshold: 0.5
 })
 

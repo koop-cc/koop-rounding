@@ -1,14 +1,14 @@
 /**
- * bundleType: defines a bundle
+ * offerType: defines a offer
  */
-export interface bundleType {
+export interface offerType {
   /**
-   * number of units within a bundle.
+   * number of units within a offer.
    */
   unit_count: number;
 
   /**
-   * size of a unit within a bundle.
+   * size of a unit within a offer.
    */
   unit_size: number;
 
@@ -18,7 +18,7 @@ export interface bundleType {
    * if omitted.
    */
   step_size: number;
-  
+
   /**
    * step size to round the results.
    * must be a divider of step_size and smaller or
@@ -54,17 +54,17 @@ export interface userValue {
   rounded_value?: number;
 
   /**
-   * Weight: threshold > weight < 1. The closer a value is to a bundle,
+   * Weight: threshold > weight < 1. The closer a value is to a offer,
    * the closer it is to 1.
    */
   weight?: number;
 }
 
 /**
- * roundedBundle: processed bundle consisting of rounded user values
+ * roundedOffer: processed offer consisting of rounded user values
  * and rounded totals.
  */
-export interface roundedBundle {
+export interface roundedOffer {
   /**
    * Grand total of order
    */
@@ -76,9 +76,9 @@ export interface roundedBundle {
   rounded_total: number;
 
   /**
-   * Number of bundles required for this order
+   * Number of offers required for this order
    */
-  bundles: number;
+  offers: number;
 
   /**
    * Processed user values of this order
@@ -92,7 +92,7 @@ export interface roundedBundle {
   iterations: number;
 
   /**
-   * Error: false or string 
+   * Error: false or string
    */
   error?: string;
 }
@@ -102,17 +102,17 @@ export interface roundedBundle {
  */
 export interface roundingOptions {
   /**
-   * Threshold for rounding up to next bundle count.
-   * 0.5 means: upper 50% -> plus one bundle, 
-   * lower 50% -> minus one bundle.
+   * Threshold for rounding up to next offer count.
+   * 0.5 means: upper 50% -> plus one offer,
+   * lower 50% -> minus one offer.
    * Default: 0.6
    */
   threshold?: number,
 
   /**
-   * Threshold for rounding up the first bundle.
-   * 1.0 means the total offers must at least
-   * the size of one bundle.
+   * Threshold for rounding up the first offer.
+   * 1.0 means the total products must at least
+   * the size of one offer.
    * Default: 0.75
    */
   min_threshold?: number
