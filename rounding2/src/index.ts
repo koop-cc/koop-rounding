@@ -24,9 +24,40 @@ interface Order {
     offer_id: number;
     quantity: number;
     name: string;
+    locked: boolean;
     quantity_adjusted?: number;
 }
 
+
+/**
+ * Explanation:
+
+	1.	Ensure step_size is not smaller than rounding_step_size:
+	•	Check if offer.step_size is smaller than offer.rounding_step_size and adjust it if necessary.
+	2.	Filter out orders with quantity 0:
+	•	Include all orders with a quantity greater than 0 for adjustment, but locked orders are included in the total calculation.
+	3.	Check for division by zero:
+	•	If totalOrderedQuantity is zero after filtering, return the orders as they are.
+	4.	Rounding up target quantity:
+	•	Round up the target quantity to the next multiple of the unit size.
+	5.	Scaling factor calculation:
+	•	Calculate the scaling factor to adjust order quantities.
+	6.	Initial adjustment:
+	•	Adjust order quantities using the scaling factor and round them to the nearest rounding_step_size using a more accurate rounding approach to avoid floating-point precision issues. Locked orders retain their original quantity.
+	7.	Distribute remaining difference:
+	•	Evenly distribute the remaining difference across all non-locked orders in steps of rounding_step_size. Locked orders are not adjusted.
+	•	After distributing steps, any remaining difference is added to the first non-locked order to ensure the total adjusted quantity matches the target.
+	8.	Include zero quantity and locked orders:
+	•	Orders with a quantity of 0 are included back in the final result with quantity_adjusted set to the original quantity. Locked orders are included with quantity_adjusted set to the original quantity.
+	9.	Performance measurement:
+	•	Measure the time taken to execute the method and log it.
+
+This TypeScript function ensures that locked orders are included in the total calculation but are not adjusted, while orders with a quantity of 0 are handled correctly. The final output includes all orders with their adjusted quantities.
+
+ * @param orders
+ * @param offer
+ * @returns
+ */
 function adjustOrders(orders: Order[], offer: Offer): Order[] {
     const startTime = new Date();
 
@@ -45,10 +76,9 @@ function adjustOrders(orders: Order[], offer: Offer): Order[] {
     const totalOrderedQuantity = validOrders.reduce((sum, order) => sum + order.quantity, 0);
 
     if (totalOrderedQuantity === 0) {
-        console.log('Total ordered quantity is zero, cannot adjust orders.');
         return orders.map(order => ({
             ...order,
-            quantity_adjusted: 0
+            quantity_adjusted: order.quantity
         }));
     }
 
@@ -60,6 +90,12 @@ function adjustOrders(orders: Order[], offer: Offer): Order[] {
 
     // Initial adjustment of order quantities
     let adjustedOrders = validOrders.map(order => {
+        if (order.locked) {
+            return {
+                ...order,
+                quantity_adjusted: order.quantity
+            };
+        }
         let adjustedQuantity = order.quantity * scaleFactor;
         adjustedQuantity = Math.round((adjustedQuantity + Number.EPSILON) / offer.rounding_step_size) * offer.rounding_step_size;
         adjustedQuantity = Math.max(0, adjustedQuantity);
@@ -72,37 +108,40 @@ function adjustOrders(orders: Order[], offer: Offer): Order[] {
     // Calculate total quantity of adjusted orders
     let currentTotalAdjusted = adjustedOrders.reduce((sum, order) => sum + (order.quantity_adjusted ?? 0), 0);
 
-    // Evenly distribute the remaining difference across all orders
+    // Evenly distribute the remaining difference across all non-locked orders
     let remainingDifference = adjustedTotalQuantity - currentTotalAdjusted;
-    const orderCount = adjustedOrders.length;
+    const nonLockedOrders = adjustedOrders.filter(order => !order.locked);
 
-    if (remainingDifference !== 0) {
-        let steps = Math.floor(Math.abs(remainingDifference) / offer.rounding_step_size);
+    if (remainingDifference !== 0 && nonLockedOrders.length > 0) {
         let step = offer.rounding_step_size * Math.sign(remainingDifference);
+        let steps = Math.round(Math.abs(remainingDifference) / offer.rounding_step_size);
 
         for (let i = 0; i < steps; i++) {
-            adjustedOrders[i % orderCount].quantity_adjusted! += step;
+            nonLockedOrders[i % nonLockedOrders.length].quantity_adjusted! += step;
         }
 
-        currentTotalAdjusted = adjustedOrders.reduce((sum, order) => sum + (order.quantity_adjusted ?? 0), 0);
-        remainingDifference = adjustedTotalQuantity - currentTotalAdjusted;
+        remainingDifference = adjustedTotalQuantity - adjustedOrders.reduce((sum, order) => sum + (order.quantity_adjusted ?? 0), 0);
 
         if (remainingDifference !== 0) {
-            step = offer.rounding_step_size * Math.sign(remainingDifference);
-            adjustedOrders[0].quantity_adjusted! += step;
+            nonLockedOrders[0].quantity_adjusted! += remainingDifference;
         }
     }
 
-    // Include orders with quantity 0 back into the result with quantity_adjusted set to 0
+    // Include locked orders and orders with quantity 0 back into the result with quantity_adjusted set accordingly
     const finalOrders = orders.map(order => {
-        const adjustedOrder = adjustedOrders.find(adjusted => adjusted.order_id === order.order_id);
-        return adjustedOrder ? adjustedOrder : { ...order, quantity_adjusted: 0 };
+        if (order.locked || order.quantity === 0) {
+            return {
+                ...order,
+                quantity_adjusted: order.quantity
+            };
+        } else {
+            const adjustedOrder = adjustedOrders.find(adjusted => adjusted.order_id === order.order_id);
+            return adjustedOrder ? adjustedOrder : { ...order, quantity_adjusted: 0 };
+        }
     });
 
     const endTime = new Date();
     const timeDiff = endTime.getTime() - startTime.getTime(); // Time difference in milliseconds
-
-    console.log(finalOrders);
     console.log(`Ordered: ${finalOrders.reduce((sum, order) => sum + (order.quantity ?? 0), 0)}`);
     console.log(`Adjusted: ${finalOrders.reduce((sum, order) => sum + (order.quantity_adjusted ?? 0), 0)}`);
     console.log(`Time taken: ${timeDiff}ms`);
@@ -122,13 +161,12 @@ const offer: Offer = {
 };
 
 const orders: Order[] = [
-    { order_id: 1, offer_id: 97, quantity: 1, name: "Hans" },
-    { order_id: 2, offer_id: 97, quantity: 2, name: "Rike" },
-    { order_id: 3, offer_id: 97, quantity: 1.5, name: "Sebastian" },
-    { order_id: 4, offer_id: 97, quantity: 1.5, name: "Bob" },
-    { order_id: 5, offer_id: 97, quantity: 1.0, name: "Remy" },
-    { order_id: 6, offer_id: 97, quantity: 0.5, name: "Bruno" },
+    { order_id: 1, offer_id: 97, quantity: 1, name: "Hans", locked: true },
+    { order_id: 2, offer_id: 97, quantity: 2, name: "Rike", locked: false },
+    { order_id: 3, offer_id: 97, quantity: 1.5, name: "Sebastian", locked: false },
+    { order_id: 4, offer_id: 97, quantity: 1.5, name: "Bob", locked: true },
+    { order_id: 5, offer_id: 97, quantity: 1.0, name: "Remy", locked: false },
+    { order_id: 6, offer_id: 97, quantity: 0.5, name: "Bruno", locked: false },
 ];
 
 const adjustedOrders = adjustOrders(orders, offer);
-
