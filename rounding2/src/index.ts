@@ -28,35 +28,26 @@ interface Order {
     quantity_adjusted?: number;
 }
 
-
 /**
- * Explanation:
-
-	1.	Ensure step_size is not smaller than rounding_step_size:
-	•	Check if offer.step_size is smaller than offer.rounding_step_size and adjust it if necessary.
-	2.	Filter out orders with quantity 0:
-	•	Include all orders with a quantity greater than 0 for adjustment, but locked orders are included in the total calculation.
-	3.	Check for division by zero:
-	•	If totalOrderedQuantity is zero after filtering, return the orders as they are.
-	4.	Rounding up target quantity:
-	•	Round up the target quantity to the next multiple of the unit size.
-	5.	Scaling factor calculation:
-	•	Calculate the scaling factor to adjust order quantities.
-	6.	Initial adjustment:
-	•	Adjust order quantities using the scaling factor and round them to the nearest rounding_step_size using a more accurate rounding approach to avoid floating-point precision issues. Locked orders retain their original quantity.
-	7.	Distribute remaining difference:
-	•	Evenly distribute the remaining difference across all non-locked orders in steps of rounding_step_size. Locked orders are not adjusted.
-	•	After distributing steps, any remaining difference is added to the first non-locked order to ensure the total adjusted quantity matches the target.
-	8.	Include zero quantity and locked orders:
-	•	Orders with a quantity of 0 are included back in the final result with quantity_adjusted set to the original quantity. Locked orders are included with quantity_adjusted set to the original quantity.
-	9.	Performance measurement:
-	•	Measure the time taken to execute the method and log it.
-
-This TypeScript function ensures that locked orders are included in the total calculation but are not adjusted, while orders with a quantity of 0 are handled correctly. The final output includes all orders with their adjusted quantities.
-
- * @param orders
- * @param offer
- * @returns
+ * Adjusts the quantities of orders to match the offer's unit size and step size constraints.
+ *
+ * @param {Order[]} orders - The list of orders to be adjusted.
+ * @param {Offer} offer - The offer containing unit size, step size, and rounding step size constraints.
+ * @returns {Order[]} - The list of orders with adjusted quantities.
+ *
+ * The function follows these steps:
+ * 1. Ensure `step_size` is not smaller than `rounding_step_size`.
+ * 2. Filter out orders with quantity 0.
+ * 3. Check for division by zero: If `totalOrderedQuantity` is zero after filtering, return the orders as they are.
+ * 4. Round up target quantity to the next multiple of the unit size.
+ * 5. Calculate the scaling factor to adjust order quantities.
+ * 6. Initial adjustment: Adjust order quantities using the scaling factor and round them to the nearest `rounding_step_size`.
+ *    Locked orders retain their original quantity.
+ * 7. Distribute remaining difference: Evenly distribute the remaining difference across all non-locked orders in steps of `rounding_step_size`.
+ *    After distributing steps, any remaining difference is added to the first non-locked order to ensure the total adjusted quantity matches the target.
+ * 8. Include zero quantity and locked orders: Orders with a quantity of 0 are included back in the final result with `quantity_adjusted` set to the original quantity.
+ *    Locked orders are included with `quantity_adjusted` set to the original quantity.
+ * 9. Performance measurement: Measure the time taken to execute the method and log it.
  */
 function adjustOrders(orders: Order[], offer: Offer): Order[] {
     const startTime = new Date();
@@ -142,6 +133,7 @@ function adjustOrders(orders: Order[], offer: Offer): Order[] {
 
     const endTime = new Date();
     const timeDiff = endTime.getTime() - startTime.getTime(); // Time difference in milliseconds
+
     console.log(`Ordered: ${finalOrders.reduce((sum, order) => sum + (order.quantity ?? 0), 0)}`);
     console.log(`Adjusted: ${finalOrders.reduce((sum, order) => sum + (order.quantity_adjusted ?? 0), 0)}`);
     console.log(`Time taken: ${timeDiff}ms`);
