@@ -3,6 +3,7 @@ export interface Offer {
     unit_size: number;
     step_size: number;
     rounding_step_size: number;
+    total_amount?: number;
   }
 
   export interface Order {
@@ -58,11 +59,11 @@ export function adjustOrders(orders: Order[], offer: Offer): Order[] {
         }));
     }
 
-    // Round up target quantity to the next multiple of the unit size
-    const adjustedTotalQuantity = Math.ceil(totalOrderedQuantity / unitTotalSize) * unitTotalSize;
+    // Determine the target total quantity to adjust to
+    const targetTotalQuantity = offer.total_amount ?? Math.round(totalOrderedQuantity / unitTotalSize) * unitTotalSize;
 
     // Calculate scaling factor
-    const scaleFactor = adjustedTotalQuantity / totalOrderedQuantity;
+    const scaleFactor = targetTotalQuantity / totalOrderedQuantity;
 
     // Initial adjustment of order quantities
     let adjustedOrders = validOrders.map(order => {
@@ -73,7 +74,7 @@ export function adjustOrders(orders: Order[], offer: Offer): Order[] {
             };
         }
         let adjustedQuantity = order.quantity * scaleFactor;
-        adjustedQuantity = Math.round((adjustedQuantity + Number.EPSILON) / offer.rounding_step_size) * offer.rounding_step_size;
+        adjustedQuantity = Math.round(adjustedQuantity / offer.rounding_step_size) * offer.rounding_step_size;
         adjustedQuantity = Math.max(0, adjustedQuantity);
         return {
             ...order,
@@ -84,8 +85,8 @@ export function adjustOrders(orders: Order[], offer: Offer): Order[] {
     // Calculate total quantity of adjusted orders
     let currentTotalAdjusted = adjustedOrders.reduce((sum, order) => sum + (order.quantity_adjusted ?? 0), 0);
 
-    // Evenly distribute the remaining difference across all non-locked orders
-    let remainingDifference = adjustedTotalQuantity - currentTotalAdjusted;
+    // Distribute the remaining difference across all non-locked orders
+    let remainingDifference = targetTotalQuantity - currentTotalAdjusted;
     const nonLockedOrders = adjustedOrders.filter(order => !order.locked);
 
     if (remainingDifference !== 0 && nonLockedOrders.length > 0) {
@@ -96,7 +97,7 @@ export function adjustOrders(orders: Order[], offer: Offer): Order[] {
             nonLockedOrders[i % nonLockedOrders.length].quantity_adjusted! += step;
         }
 
-        remainingDifference = adjustedTotalQuantity - adjustedOrders.reduce((sum, order) => sum + (order.quantity_adjusted ?? 0), 0);
+        remainingDifference = targetTotalQuantity - adjustedOrders.reduce((sum, order) => sum + (order.quantity_adjusted ?? 0), 0);
 
         if (remainingDifference !== 0) {
             nonLockedOrders[0].quantity_adjusted! += remainingDifference;
@@ -119,7 +120,7 @@ export function adjustOrders(orders: Order[], offer: Offer): Order[] {
     const endTime = new Date();
     const timeDiff = endTime.getTime() - startTime.getTime(); // Time difference in milliseconds
 
-    console.log(finalOrders)
+    console.log(finalOrders);
     console.log(`Ordered: ${finalOrders.reduce((sum, order) => sum + (order.quantity ?? 0), 0)}`);
     console.log(`Adjusted: ${finalOrders.reduce((sum, order) => sum + (order.quantity_adjusted ?? 0), 0)}`);
     console.log(`Time taken: ${timeDiff}ms`);
@@ -133,10 +134,11 @@ const offer: Offer = {
     unit_size: 5,
     step_size: 0.5,
     rounding_step_size: 0.1, // Changed rounding_step_size to 0.1
+    total_amount: 20 // New total_amount parameter
 };
 
 const orders: Order[] = [
-    { id: 1,quantity: 1, name: "Hans", locked: true },
+    { id: 1, quantity: 1, name: "Hans", locked: true },
     { id: 2, quantity: 2.4, name: "Rike", locked: false },
     { id: 3, quantity: 3.1, name: "Sebastian", locked: false },
     { id: 4, quantity: 1.5, name: "Bob", locked: true },
@@ -144,5 +146,3 @@ const orders: Order[] = [
     { id: 6, quantity: 1.1, name: "Bruno", locked: false },
     { id: 7, quantity: 1.1, name: "Bruno", locked: false },
 ];
-
-// const adjustedOrders = adjustOrders(orders, offer);

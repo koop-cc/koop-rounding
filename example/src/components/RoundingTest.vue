@@ -71,7 +71,10 @@ doRound()
         <td>Rounding Step Size</td>
         <td><input type="number" v-model="offer.rounding_step_size"></td>
       </tr>
-
+      <tr>
+        <td><span :style="{fontWeight: 'bold'}">Force</span> Total amount</td>
+        <td><input type="number" v-model="offer.total_amount"></td>
+      </tr>
     </table>
     <table>
       <thead><tr>
