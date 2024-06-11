@@ -48,7 +48,7 @@ doRound()
 
 <template>
   <h1>
-    Koop.cc: Rounding Test
+    Koop.cc: Rounding Test V2
   </h1>
   <section style="padding: 2rem; border: 1px solid; display: flex; justify-content: space-evenly;">
     <table>
