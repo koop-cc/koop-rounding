@@ -1,4 +1,5 @@
 export interface Offer {
+    id: number;
     unit_count: number;
     unit_size: number;
     step_size: number;
@@ -8,10 +9,11 @@ export interface Offer {
 
   export interface Order {
     id: number;
-    name: string;
     quantity: number;
-    locked: boolean;
     quantity_adjusted?: number;
+    quantity_adjusted_locked: boolean;
+    name?: string;
+    error?: 'quantity_adjusted_below_zero';
   }
 
 /**
@@ -67,7 +69,7 @@ export function adjustOrders(orders: Order[], offer: Offer): Order[] {
 
     // Initial adjustment of order quantities
     let adjustedOrders = validOrders.map(order => {
-        if (order.locked) {
+        if (order.quantity_adjusted_locked) {
             return {
                 ...order,
                 quantity_adjusted: order.quantity
@@ -87,7 +89,7 @@ export function adjustOrders(orders: Order[], offer: Offer): Order[] {
 
     // Distribute the remaining difference across all non-locked orders
     let remainingDifference = targetTotalQuantity - currentTotalAdjusted;
-    const nonLockedOrders = adjustedOrders.filter(order => !order.locked);
+    const nonLockedOrders = adjustedOrders.filter(order => !order.quantity_adjusted_locked);
 
     if (remainingDifference !== 0 && nonLockedOrders.length > 0) {
         let step = offer.rounding_step_size * Math.sign(remainingDifference);
@@ -106,13 +108,16 @@ export function adjustOrders(orders: Order[], offer: Offer): Order[] {
 
     // Include locked orders and orders with quantity 0 back into the result with quantity_adjusted set accordingly
     const finalOrders = orders.map(order => {
-        if (order.locked || order.quantity === 0) {
+        if (order.quantity_adjusted_locked || order.quantity === 0) {
             return {
                 ...order,
                 quantity_adjusted: order.quantity
             };
         } else {
             const adjustedOrder = adjustedOrders.find(adjusted => adjusted.id === order.id);
+            if((adjustedOrder?.quantity_adjusted ?? 0) < 0) {
+                adjustedOrder!.error = 'quantity_adjusted_below_zero'
+            }
             return adjustedOrder ? adjustedOrder : { ...order, quantity_adjusted: 0 };
         }
     });
@@ -138,11 +143,11 @@ const offer: Offer = {
 };
 
 const orders: Order[] = [
-    { id: 1, quantity: 1, name: "Hans", locked: true },
-    { id: 2, quantity: 2.4, name: "Rike", locked: false },
-    { id: 3, quantity: 3.1, name: "Sebastian", locked: false },
-    { id: 4, quantity: 1.5, name: "Bob", locked: true },
-    { id: 5, quantity: 1.2, name: "Remy", locked: false },
-    { id: 6, quantity: 1.1, name: "Bruno", locked: false },
-    { id: 7, quantity: 1.1, name: "Bruno", locked: false },
+    { id: 1, quantity: 1, name: "Hans", quantity_adjusted_locked: true },
+    { id: 2, quantity: 2.4, name: "Rike", quantity_adjusted_locked: false },
+    { id: 3, quantity: 3.1, name: "Sebastian", quantity_adjusted_locked: false },
+    { id: 4, quantity: 1.5, name: "Bob", quantity_adjusted_locked: true },
+    { id: 5, quantity: 1.2, name: "Remy", quantity_adjusted_locked: false },
+    { id: 6, quantity: 1.1, name: "Bruno", quantity_adjusted_locked: false },
+    { id: 7, quantity: 1.1, name: "Bruno", quantity_adjusted_locked: false },
 ];

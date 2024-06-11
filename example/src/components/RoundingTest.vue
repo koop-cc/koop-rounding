@@ -13,13 +13,13 @@ const offer = ref({
 var error = ref("")
 
 var members = ref([
-    { id: 1, quantity: 1, name: "Hans", locked: true },
-    { id: 2, quantity: 2.4, name: "Rike", locked: false },
-    { id: 3, quantity: 3.1, name: "Sebastian", locked: false },
-    { id: 4, quantity: 1.5, name: "Bob", locked: true },
-    { id: 5, quantity: 1.2, name: "Remy", locked: false },
-    { id: 6, quantity: 1.1, name: "Bla", locked: false },
-    { id: 7, quantity: 1.1, name: "Bruno", locked: false },
+    { id: 1, quantity: 1, name: "Hans", quantity_adjusted_locked: true },
+    { id: 2, quantity: 2.4, name: "Rike", quantity_adjusted_locked: false },
+    { id: 3, quantity: 3.1, name: "Sebastian", quantity_adjusted_locked: false },
+    { id: 4, quantity: 1.5, name: "Bob", quantity_adjusted_locked: true },
+    { id: 5, quantity: 1.2, name: "Remy", quantity_adjusted_locked: false },
+    { id: 6, quantity: 1.1, name: "Bla", quantity_adjusted_locked: false },
+    { id: 7, quantity: 1.1, name: "Bruno", quantity_adjusted_locked: false },
 ] as Order[])
 
 const results = ref([] as Order[])
@@ -90,12 +90,12 @@ doRound()
           <input type="number" v-model="member.quantity">
         </td>
         <td>
-          <input type="checkbox" v-model="member.locked">
+          <input type="checkbox" v-model="member.quantity_adjusted_locked">
         </td>
       </tr>
       <tfoot>
         <tr>
-          <td><button @click="members.push({id: members.length + 1, quantity: offer.step_size * 1, locked: false, name: ''})">Add Member</button></td>
+          <td><button @click="members.push({id: members.length + 1, quantity: offer.step_size * 1, quantity_adjusted_locked: false, name: ''})">Add Member</button></td>
           <td><button @click="members.pop()">Remove Member</button></td>
         </tr>
       </tfoot>
@@ -119,7 +119,7 @@ doRound()
         <td>{{ m.name }}</td>
         <td>{{ m.quantity.toFixed(2) }}</td>
         <td>{{ m.quantity_adjusted?.toFixed(2) ?? 0 }}</td>
-        <td>{{ (isNaN(m.quantity) || isNaN(m?.quantity_adjusted ?? 0)) ? '⚠️' : m.locked ? '🛑' : '✅' }}</td>
+        <td>{{ (isNaN(m.quantity) || isNaN(m?.quantity_adjusted ?? 0) || m?.error !== undefined ) ? '⚠️' : m.quantity_adjusted_locked ? '🛑' : '✅' }}</td>
       </tr>
       <tfoot :style="{'background': '#CCCC'}" >
         <td :style="{ fontWeight: 'bold' }">Total</td>
