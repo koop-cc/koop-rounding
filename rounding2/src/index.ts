@@ -1,32 +1,17 @@
-enum UnitMassUnit {
-    Gram = 'gram',
-    Kilogram = 'kilogram'
-}
-
-interface Offer {
-    offer_id: number;
+export interface Offer {
     unit_count: number;
     unit_size: number;
-    unit_massunit: UnitMassUnit;
     step_size: number;
     rounding_step_size: number;
-    article_nr: string;
-}
+  }
 
-interface Product {
-    product_id: number;
+  export interface Order {
+    id: number;
     name: string;
-    offers: Offer[];
-}
-
-interface Order {
-    order_id: number;
-    offer_id: number;
     quantity: number;
-    name: string;
     locked: boolean;
     quantity_adjusted?: number;
-}
+  }
 
 /**
  * Adjusts the quantities of orders to match the offer's unit size and step size constraints.
@@ -49,7 +34,7 @@ interface Order {
  *    Locked orders are included with `quantity_adjusted` set to the original quantity.
  * 9. Performance measurement: Measure the time taken to execute the method and log it.
  */
-function adjustOrders(orders: Order[], offer: Offer): Order[] {
+export function adjustOrders(orders: Order[], offer: Offer): Order[] {
     const startTime = new Date();
 
     // Ensure step_size is not smaller than rounding_step_size
@@ -126,7 +111,7 @@ function adjustOrders(orders: Order[], offer: Offer): Order[] {
                 quantity_adjusted: order.quantity
             };
         } else {
-            const adjustedOrder = adjustedOrders.find(adjusted => adjusted.order_id === order.order_id);
+            const adjustedOrder = adjustedOrders.find(adjusted => adjusted.id === order.id);
             return adjustedOrder ? adjustedOrder : { ...order, quantity_adjusted: 0 };
         }
     });
@@ -144,23 +129,20 @@ function adjustOrders(orders: Order[], offer: Offer): Order[] {
 
 // Example usage
 const offer: Offer = {
-    offer_id: 97,
     unit_count: 1,
     unit_size: 5,
-    unit_massunit: UnitMassUnit.Kilogram,
     step_size: 0.5,
     rounding_step_size: 0.1, // Changed rounding_step_size to 0.1
-    article_nr: "97"
 };
 
 const orders: Order[] = [
-    { order_id: 1, offer_id: 97, quantity: 1, name: "Hans", locked: true },
-    { order_id: 2, offer_id: 97, quantity: 2.4, name: "Rike", locked: false },
-    { order_id: 3, offer_id: 97, quantity: 3.1, name: "Sebastian", locked: false },
-    { order_id: 4, offer_id: 97, quantity: 1.5, name: "Bob", locked: true },
-    { order_id: 5, offer_id: 97, quantity: 1.2, name: "Remy", locked: false },
-    { order_id: 6, offer_id: 97, quantity: 1.1, name: "Bruno", locked: false },
-    { order_id: 7, offer_id: 97, quantity: 1.1, name: "Bruno", locked: false },
+    { id: 1,quantity: 1, name: "Hans", locked: true },
+    { id: 2, quantity: 2.4, name: "Rike", locked: false },
+    { id: 3, quantity: 3.1, name: "Sebastian", locked: false },
+    { id: 4, quantity: 1.5, name: "Bob", locked: true },
+    { id: 5, quantity: 1.2, name: "Remy", locked: false },
+    { id: 6, quantity: 1.1, name: "Bruno", locked: false },
+    { id: 7, quantity: 1.1, name: "Bruno", locked: false },
 ];
 
-const adjustedOrders = adjustOrders(orders, offer);
+// const adjustedOrders = adjustOrders(orders, offer);

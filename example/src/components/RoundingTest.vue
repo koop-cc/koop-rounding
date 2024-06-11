@@ -1,49 +1,30 @@
 <script setup lang="ts">
 
 import { ref, watch } from 'vue'
-import type { offerType, userValue, roundedOffer } from '@library/index.d'
-import koop_rounding from '@library/index'
-
-const threshold = ref(0.6 as number)
-
-const min_threshold = ref(0.75 as number)
+import { adjustOrders, type Order, type Offer } from '@library/index'
 
 const offer = ref({
-  unit_count: 1,
-  unit_size: 1000,
-  step_size: 100,
-  rounding_step_size: 10
-} as offerType)
+    unit_count: 1,
+    unit_size: 5,
+    step_size: 0.5,
+    rounding_step_size: 0.1,
+} as Offer)
 
-var error = ref(null as any)
+var error = ref("")
 
 var members = ref([
-  {
-    id: "Hans",
-    value: 400
-  },
-  {
-    id: "Petra",
-    value: 400
-  },
-  {
-    id: "Franz",
-    value: 100
-  }
-] as userValue[])
+    { id: 1, quantity: 1, name: "Hans", locked: true },
+    { id: 2, quantity: 2.4, name: "Rike", locked: false },
+    { id: 3, quantity: 3.1, name: "Sebastian", locked: false },
+    { id: 4, quantity: 1.5, name: "Bob", locked: true },
+    { id: 5, quantity: 1.2, name: "Remy", locked: false },
+    { id: 6, quantity: 1.1, name: "Bla", locked: false },
+    { id: 7, quantity: 1.1, name: "Bruno", locked: false },
+] as Order[])
 
-var rounded = ref({} as roundedOffer)
+const results = ref([] as Order[])
 
 watch(offer, (val) => {
-  doRound()
-}, {deep: true})
-
-watch(min_threshold, (val) => {
-  doRound()
-}, {deep: true})
-
-
-watch(threshold, (val) => {
   doRound()
 }, {deep: true})
 
@@ -53,15 +34,11 @@ watch(members, (val) => {
 }, {deep: true})
 
 const doRound = () => {
-  error = null
-  const r = new koop_rounding(offer.value, members.value)
+  error.value = ""
   try {
-    rounded.value = r.round({
-      min_threshold: min_threshold.value * 1,
-      threshold: threshold.value * 1
-    })
-  } catch (e:any) {
-    error = e
+    results.value = adjustOrders(members.value, offer.value)
+  } catch(e: any) {
+    error.value = e.message as string
   }
 }
 
@@ -73,39 +50,6 @@ doRound()
   <h1>
     Koop.cc: Rounding Test
   </h1>
-  <header style="margin-bottom: 2rem;">
-    <ol>
-      <li>Anzahl Offers der Bestellung wird ermittelt</li>
-      <li>Offers &lt; 1 ? Wenn &gt; min_threshold, aufrunden auf 1</li>
-      <li>Offers &gt; 1 ? Wenn &gt; threshold, aufrunden auf nächst höheres Offer, sonst abrunden</li>
-      <li>Werte Testen: Alle Products müssen teilbar sein durch step_size</li>
-      <li>Loop Starten:
-        <ol>
-          <li>Alle Bestellungen zusammenzählen</li>
-          <li>im ersten Durchgang:
-            <ol>
-              <li>Wenn Total > Anzahl Offers * offer_size, dann zufälligen (unlocked) Wert nehmen und um 1 Schritt reduzieren</li>
-              <li>Wenn Total &lt; Anzahl Offers * offer_size, dann zufälligen (unlocked) Wert nehmen und um 1 Schritt erhöhen</li>
-            </ol>
-          </li>
-          <li>in den folgenden Durchgängen:
-            <ol>
-              <li>Wenn Total > Anzahl Offers * offer_size, dann nächsten (oder ersten) (unlocked) Wert nehmen und um 1 Schritt reduzieren</li>
-              <li>Wenn Total &lt; Anzahl Offers * offer_size, dann nächsten (oder ersten) (unlocked) Wert nehmen und um 1 Schritt erhöhen</li>
-            </ol>
-          </li>
-          <li>
-            Test:
-            <ol>
-              <li>Repeat: Wenn Total &lt;&gt; Anzahl Offers * offer_size, wiederholen.</li>
-              <li>OK: Wenn Total == Anzahl Offers * offer_size, abschliessen.</li>
-              <li>Error: Falls keine Werte vorhanden sind, die gerundet werden können, oder falls ein Wert auf -1 fällt, abbrechen.</li>
-            </ol>
-          </li>
-        </ol>
-      </li>
-    </ol>
-  </header>
   <section style="padding: 2rem; border: 1px solid; display: flex; justify-content: space-evenly;">
     <table>
       <thead><tr>
@@ -127,29 +71,6 @@ doRound()
         <td>Rounding Step Size</td>
         <td><input type="number" v-model="offer.rounding_step_size"></td>
       </tr>
-      <tr>
-        <td>Threshold*</td>
-        <td><input v-model="threshold"></td>
-      </tr>
-      <tr>
-        <td>Threshold min.*</td>
-        <td><input v-model="min_threshold"></td>
-      </tr>
-      <tr style="font-size: 75%">
-        <td>threshold</td>
-        <td>
-          Grenzwert zum Aufrunden<br>
-          auf das nächste Offer
-        </td>
-      </tr>
-      <tr style="font-size: 75%">
-        <td>min_Threshold</td>
-        <td>
-          Grenzwert zum aufrunden<br>
-          auf das erste Offer<br>
-          (default 0.5 * offer size)
-        </td>
-      </tr>
 
     </table>
     <table>
@@ -160,10 +81,10 @@ doRound()
       </tr></thead>
       <tr :key="member.id" v-for="member in members">
         <td>
-          <input v-model="member.id">
+          <input v-model="member.name">
         </td>
         <td>
-          <input type="number" v-model="member.value">
+          <input type="number" v-model="member.quantity">
         </td>
         <td>
           <input type="checkbox" v-model="member.locked">
@@ -171,13 +92,13 @@ doRound()
       </tr>
       <tfoot>
         <tr>
-          <td><button @click="members.push({id: `Member ${members.length + 1}`, value: offer.step_size * 1})">Add Member</button></td>
+          <td><button @click="members.push({id: members.length + 1, quantity: offer.step_size * 1, locked: false, name: ''})">Add Member</button></td>
           <td><button @click="members.pop()">Remove Member</button></td>
         </tr>
       </tfoot>
     </table>
     </section>
-  <pre v-if="rounded.error" style="clear: both; color: red">{{ rounded.error }}</pre>
+  <pre v-if="error != ''" style="clear: both; color: red">{{ error }}</pre>
 
   <div class="debug" style="clear: both;">
     <h2>Orders:</h2>
@@ -187,29 +108,30 @@ doRound()
         <tr>
           <td>Member</td>
           <td>Ordered</td>
-          <td>Rounded</td>
+          <td>Adjusted</td>
           <td>Status</td>
         </tr>
       </thead>
-      <tr :style="{'background': k%2===0?'#CCC3':''}" :key="m.id" v-for="m,k in rounded.values">
-        <td>{{ m.id }}</td>
-        <td>{{ m.value }}</td>
-        <td>{{ m.rounded_value }}</td>
-        <td>{{ m.locked ? '🛑' : Math.abs(m.value - (m.rounded_value ?? 0)) >= (2 * offer.step_size) ? '⚠️' : '✅' }}</td>
+      <tr :style="{'background': k%2===0?'#CCC3':''}" :key="m.id" v-for="m,k in results">
+        <td>{{ m.name }}</td>
+        <td>{{ m.quantity.toFixed(2) }}</td>
+        <td>{{ m.quantity_adjusted?.toFixed(2) ?? 0 }}</td>
+        <td>{{ (isNaN(m.quantity) || isNaN(m?.quantity_adjusted ?? 0)) ? '⚠️' : m.locked ? '🛑' : '✅' }}</td>
       </tr>
+      <tfoot :style="{'background': '#CCCC'}" >
+        <td :style="{ fontWeight: 'bold' }">Total</td>
+        <td :style="{ fontWeight: 'bold' }">{{ results.reduce((acc, curr) => acc += curr.quantity, 0).toFixed(2) }}</td>
+        <td :style="{ fontWeight: 'bold' }">{{ results.reduce((acc, curr) => acc += curr?.quantity_adjusted ?? 0, 0).toFixed(2) }}</td>
+        <td></td>
+      </tfoot>
     </table>
     <br>
-    <h2>Stats:</h2>
-    <p>Iterations: {{ rounded.iterations }}</p>
-    <p>Total: {{ rounded.total }}</p>
-    <p>Rounded: {{ rounded.rounded_total }}</p>
-    <p>Offers: {{ rounded.offers }}</p>
     <br>
     <h2>Legende:</h2>
     <p>
       🛑 Locked<br>
-      ⚠️ Delta &gt; or equal 2 * step_size<br>
-      ✅ Delta &lt; * step_size
+      ⚠️ Error<br>
+      ✅ OK
     </p>
   </div>
 

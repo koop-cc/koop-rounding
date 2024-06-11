@@ -8,7 +8,7 @@
     "rootDirs": [".", "./.."],
     "paths": {
       "@/*": ["./src/*"],
-      "@library/*": ["../src/*"]
+      "@library/*": ["../rounding2/src/*"]
     }
   }
 }

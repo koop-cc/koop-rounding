@@ -12,7 +12,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
-      '@library': fileURLToPath(new URL('../src', import.meta.url)),
+      '@library': fileURLToPath(new URL('../rounding2/src', import.meta.url)),
     }
   }
 })
