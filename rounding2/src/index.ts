@@ -134,6 +134,7 @@ function adjustOrders(orders: Order[], offer: Offer): Order[] {
     const endTime = new Date();
     const timeDiff = endTime.getTime() - startTime.getTime(); // Time difference in milliseconds
 
+    console.log(finalOrders)
     console.log(`Ordered: ${finalOrders.reduce((sum, order) => sum + (order.quantity ?? 0), 0)}`);
     console.log(`Adjusted: ${finalOrders.reduce((sum, order) => sum + (order.quantity_adjusted ?? 0), 0)}`);
     console.log(`Time taken: ${timeDiff}ms`);
@@ -154,11 +155,12 @@ const offer: Offer = {
 
 const orders: Order[] = [
     { order_id: 1, offer_id: 97, quantity: 1, name: "Hans", locked: true },
-    { order_id: 2, offer_id: 97, quantity: 2, name: "Rike", locked: false },
-    { order_id: 3, offer_id: 97, quantity: 1.5, name: "Sebastian", locked: false },
+    { order_id: 2, offer_id: 97, quantity: 2.4, name: "Rike", locked: false },
+    { order_id: 3, offer_id: 97, quantity: 3.1, name: "Sebastian", locked: false },
     { order_id: 4, offer_id: 97, quantity: 1.5, name: "Bob", locked: true },
-    { order_id: 5, offer_id: 97, quantity: 1.0, name: "Remy", locked: false },
-    { order_id: 6, offer_id: 97, quantity: 0.5, name: "Bruno", locked: false },
+    { order_id: 5, offer_id: 97, quantity: 1.2, name: "Remy", locked: false },
+    { order_id: 6, offer_id: 97, quantity: 1.1, name: "Bruno", locked: false },
+    { order_id: 7, offer_id: 97, quantity: 1.1, name: "Bruno", locked: false },
 ];
 
 const adjustedOrders = adjustOrders(orders, offer);
