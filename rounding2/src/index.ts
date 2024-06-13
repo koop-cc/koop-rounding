@@ -134,22 +134,3 @@ export function adjustOrders(orders: Order[], offer: Offer, debug = false): Orde
 
     return finalOrders;
 }
-
-// Example usage
-const offer: Offer = {
-    unit_count: 1,
-    unit_size: 5,
-    step_size: 0.5,
-    rounding_step_size: 0.1,
-    total_amount_adjusted: 20
-};
-
-const orders: Order[] = [
-    { id: 1, quantity: 1, name: "Hans", quantity_adjusted_locked: true },
-    { id: 2, quantity: 2.4, name: "Rike", quantity_adjusted_locked: false },
-    { id: 3, quantity: 3.1, name: "Sebastian", quantity_adjusted_locked: false },
-    { id: 4, quantity: 1.5, name: "Bob", quantity_adjusted_locked: true },
-    { id: 5, quantity: 1.2, name: "Remy", quantity_adjusted_locked: false },
-    { id: 6, quantity: 1.1, name: "Bruno", quantity_adjusted_locked: false },
-    { id: 7, quantity: 1.1, name: "Bruno", quantity_adjusted_locked: false },
-];

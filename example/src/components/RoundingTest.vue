@@ -8,6 +8,8 @@ const offer = ref({
     unit_size: 5,
     step_size: 0.5,
     rounding_step_size: 0.1,
+    total_amount: undefined,
+    total_amount_adjusted: undefined
 } as Offer)
 
 var error = ref("")
@@ -36,13 +38,17 @@ watch(members, (val) => {
 const doRound = () => {
   error.value = ""
   try {
-    const input = members.value.map((item) => ({
+    const inputOrders = members.value.map((item) => ({
       ...item,
       quantity_adjusted: Number(item.quantity_adjusted) == 0 ? undefined : item.quantity_adjusted,
       quantity_adjusted_locked: Number(item.quantity_adjusted) > 0
     }))
-    const inputOffer = unref(offer.value)
-    results.value = adjustOrders(input, inputOffer)
+    const inputOffer = {
+      ...offer.value,
+      total_amount_adjusted : Number(offer.value.total_amount_adjusted) == 0 ? undefined : offer.value.total_amount_adjusted,
+    }
+    const debug = false
+    results.value = adjustOrders(inputOrders, inputOffer, debug)
   } catch(e: any) {
     error.value = e.message as string
   }
@@ -65,19 +71,19 @@ const total_amount = computed(() => (members.value.reduce((acc, curr) => acc + c
       </tr></thead>
       <tr>
         <td>Units in Offer</td>
-        <td><input type="number" v-model="offer.unit_count"></td>
+        <td><input type="number" v-model="offer.unit_count" step="1"></td>
       </tr>
       <tr>
         <td>Unit Size</td>
-        <td><input type="number" v-model="offer.unit_size"></td>
+        <td><input type="number" v-model="offer.unit_size" step="0.1"></td>
       </tr>
       <tr>
         <td>Step Size</td>
-        <td><input type="number" v-model="offer.step_size"></td>
+        <td><input type="number" v-model="offer.step_size" step="0.1"></td>
       </tr>
       <tr>
         <td>Rounding Step Size</td>
-        <td><input type="number" v-model="offer.rounding_step_size"></td>
+        <td><input type="number" v-model="offer.rounding_step_size" step="0.1"></td>
       </tr>
     </table>
 
@@ -98,7 +104,7 @@ const total_amount = computed(() => (members.value.reduce((acc, curr) => acc + c
           <input type="number" v-model="total_amount" readonly>
         </td>
         <td>
-          <input type="number" v-model="offer.total_amount_adjusted">
+          <input type="number" v-model="offer.total_amount_adjusted" :step="offer.unit_size * offer.unit_count">
         </td>
         <td>
           <input type="checkbox"
@@ -119,12 +125,10 @@ const total_amount = computed(() => (members.value.reduce((acc, curr) => acc + c
           <input v-model="member.name">
         </td>
         <td>
-          <input type="number" v-model="member.quantity">
+          <input type="number" v-model="member.quantity" :step="offer.step_size">
         </td>
         <td>
-          <input type="number"
-          v-model="member.quantity_adjusted"
-          >
+          <input type="number" v-model="member.quantity_adjusted" :step="offer.rounding_step_size">
         </td>
         <td>
           <input type="checkbox"
