@@ -71,19 +71,19 @@ const total_amount = computed(() => (members.value.reduce((acc, curr) => acc + c
       </tr></thead>
       <tr>
         <td>Units in Offer</td>
-        <td><input type="number" v-model="offer.unit_count" step="1"></td>
+        <td><input type="number" v-model="offer.unit_count" :min="0" step="1"></td>
       </tr>
       <tr>
         <td>Unit Size</td>
-        <td><input type="number" v-model="offer.unit_size" step="0.1"></td>
+        <td><input type="number" v-model="offer.unit_size" :min="0" step="0.1"></td>
       </tr>
       <tr>
         <td>Step Size</td>
-        <td><input type="number" v-model="offer.step_size" step="0.1"></td>
+        <td><input type="number" v-model="offer.step_size" :min="0" step="0.1"></td>
       </tr>
       <tr>
         <td>Rounding Step Size</td>
-        <td><input type="number" v-model="offer.rounding_step_size" step="0.1"></td>
+        <td><input type="number" v-model="offer.rounding_step_size" :min="0" step="0.1"></td>
       </tr>
     </table>
 
@@ -104,13 +104,13 @@ const total_amount = computed(() => (members.value.reduce((acc, curr) => acc + c
           <input type="number" v-model="total_amount" readonly>
         </td>
         <td>
-          <input type="number" v-model="offer.total_amount_adjusted" :step="offer.unit_size * offer.unit_count">
+          <input type="number" v-model="offer.total_amount_adjusted" :min="0" :step="offer.unit_size * offer.unit_count">
         </td>
         <td>
           <input type="checkbox"
           :checked="offer.total_amount_adjusted !== undefined && offer.total_amount_adjusted > 0"
           @change="offer.total_amount_adjusted = (offer.total_amount_adjusted! > 0) ? undefined : offer.total_amount_adjusted"
-          :disabled="offer.total_amount_adjusted === undefined"
+          :disabled="offer.total_amount_adjusted === undefined || !(offer.total_amount_adjusted > 0)"
           >
           </td>
         </tr>
@@ -125,16 +125,16 @@ const total_amount = computed(() => (members.value.reduce((acc, curr) => acc + c
           <input v-model="member.name">
         </td>
         <td>
-          <input type="number" v-model="member.quantity" :step="offer.step_size">
+          <input type="number" v-model="member.quantity" :min="0" :step="offer.step_size">
         </td>
         <td>
-          <input type="number" v-model="member.quantity_adjusted" :step="offer.rounding_step_size">
+          <input type="number" v-model="member.quantity_adjusted" :min="0" :step="offer.rounding_step_size">
         </td>
         <td>
           <input type="checkbox"
           :checked="member.quantity_adjusted !== undefined && member.quantity_adjusted > 0"
           @change="member.quantity_adjusted = (member.quantity_adjusted! > 0) ? undefined : member.quantity_adjusted"
-          :disabled="member.quantity_adjusted === undefined"
+          :disabled="member.quantity_adjusted === undefined || !(member.quantity_adjusted > 0)"
           >
         </td>
       </tr>
