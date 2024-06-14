@@ -109,8 +109,20 @@ const total_amount = computed(() => (members.value.reduce((acc, curr) => acc + c
         <td>
           <input type="checkbox"
           :checked="offer.total_amount_adjusted !== undefined && offer.total_amount_adjusted > 0"
-          @change="offer.total_amount_adjusted = (offer.total_amount_adjusted! > 0) ? undefined : offer.total_amount_adjusted"
-          :disabled="offer.total_amount_adjusted === undefined || !(offer.total_amount_adjusted > 0)"
+          @change="(event: Event) =>
+            {
+              const checked = (event.target as any).checked
+              const hasAdjustedSet = offer.total_amount_adjusted! > 0
+              if(checked && !hasAdjustedSet) {
+                offer.total_amount_adjusted = Number(total_amount)
+              } else if(checked && hasAdjustedSet) {
+                // leave the value in quantity_adjusted
+              } else if(!checked && !hasAdjustedSet) {
+                // leave the undefined value
+              } else if(!checked && hasAdjustedSet) {
+                offer.total_amount_adjusted = undefined
+              }
+            }"
           >
           </td>
         </tr>
@@ -133,8 +145,20 @@ const total_amount = computed(() => (members.value.reduce((acc, curr) => acc + c
         <td>
           <input type="checkbox"
           :checked="member.quantity_adjusted !== undefined && member.quantity_adjusted > 0"
-          @change="member.quantity_adjusted = (member.quantity_adjusted! > 0) ? undefined : member.quantity_adjusted"
-          :disabled="member.quantity_adjusted === undefined || !(member.quantity_adjusted > 0)"
+          @change="(event: Event) =>
+            {
+              const checked = (event.target as any).checked
+              const hasAdjustedSet = member.quantity_adjusted! > 0
+              if(checked && !hasAdjustedSet) {
+                member.quantity_adjusted = member.quantity
+              } else if(checked && hasAdjustedSet) {
+                // leave the value in quantity_adjusted
+              } else if(!checked && !hasAdjustedSet) {
+                // leave the undefined value
+              } else if(!checked && hasAdjustedSet) {
+                member.quantity_adjusted = undefined
+              }
+            }"
           >
         </td>
       </tr>
