@@ -1,0 +1,19 @@
+{
+    "compilerOptions": {
+        "target": "ES5", // Kompatibel mit älteren JavaScript-Versionen
+        "module": "none", // Verhindert die Verwendung von module.exports und require
+        "removeComments": true, // Entfernt Kommentare aus dem generierten Code
+        "strict": true, // Aktiviert strikte Typprüfungen
+        "esModuleInterop": true, // Ermöglicht den Import von CommonJS-Modulen
+        "downlevelIteration": true, // Unterstützt neuere Iterationsmethoden auch in älteren Versionen
+        "skipLibCheck": true, // Überspringt die Überprüfung der Typendefinitionsdateien von Bibliotheken
+        "outDir": "./dist",
+        "lib": ["es2015", "dom"] // Fügt die ES2015-Bibliotheken hinzu
+    },
+    "include": [
+        "./src/**/*" // Pfad zu deinen TypeScript-Dateien
+    ],
+    "exclude": [
+        "node_modules" // Schließt den node_modules-Ordner aus
+    ]
+}
