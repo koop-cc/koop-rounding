@@ -10,6 +10,10 @@ DECLARE
     adjustedTotalQuantity NUMERIC;
     scaleFactor NUMERIC;
     adjustedQuantity NUMERIC;
+    currentTotalAdjusted NUMERIC := 0;
+    remainingDifference NUMERIC;
+    nonLockedOrderRecord RECORD;
+    nonLockedOrderCount INTEGER;
 BEGIN
     -- Select all valid distributions orders without quantity 0 and
     -- create a temporary table. Table is automatically destroyed after leaving
@@ -107,5 +111,24 @@ BEGIN
             WHERE id = orderRecord.id;
         END IF;
     END LOOP;
+
+    -- Calculate total quantity of adjusted orders
+    SELECT SUM(COALESCE(quantity_adjusted, 0))
+    INTO currentTotalAdjusted
+    FROM adjustedOrders;
+
+    -- Calculate the remaining difference
+    remainingDifference := adjustedTotalQuantity - currentTotalAdjusted;
+
+    -- Create a temporary table for non-locked orders
+    CREATE TEMP TABLE nonLockedOrders AS
+    SELECT *
+    FROM adjustedOrders
+    WHERE NOT quantity_adjusted_locked;
+
+    -- Get the count of non-locked orders
+    SELECT COUNT(*) INTO nonLockedOrderCount FROM nonLockedOrders;
+
+    
 END;
 $$;
