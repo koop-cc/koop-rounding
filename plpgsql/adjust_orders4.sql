@@ -3,7 +3,7 @@ DROP FUNCTION IF EXISTS kp__adjust_orders(bigint, BOOL, BOOL);
 CREATE OR REPLACE FUNCTION kp__adjust_orders(
     distr_off_id bigint,
     debug BOOL,
-    updateorders BOOL
+    update_orders BOOL
 ) RETURNS TABLE(level TEXT, message TEXT, data JSONB) LANGUAGE plpgsql AS $$
 DECLARE
     errorMsg TEXT;
@@ -267,7 +267,7 @@ BEGIN
     WHERE distributions_offer = distr_off_id;
 
     -- Update distributions_orders with finalOrders
-    IF updateorders THEN
+    IF update_orders THEN
         FOR finalOrder IN SELECT * FROM finalOrders LOOP
             UPDATE distributions_orders
             SET quantity_adjusted = finalOrder.quantity_adjusted,
