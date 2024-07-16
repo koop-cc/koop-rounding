@@ -56,6 +56,7 @@ BEGIN
         RAISE INFO '%', errorMsg;
         INSERT INTO debug_output (level, message, data) VALUES ('error', errorMsg, NULL);
         RETURN QUERY SELECT * FROM debug_output;
+        RETURN;
     END IF;
 
     -- Select the distribution offer details
@@ -81,30 +82,35 @@ BEGIN
         RAISE NOTICE '%', errorMsg;
         INSERT INTO debug_output (level, message, data) VALUES ('error', errorMsg, NULL);
         RETURN QUERY SELECT * FROM debug_output;
+        RETURN;
     END IF;
     IF offerRecord.step_size IS NULL THEN
         errorMsg := 'step_size of offer with id ' || distr_off_id || ' is invalid';
         RAISE NOTICE '%', errorMsg;
         INSERT INTO debug_output (level, message, data) VALUES ('error', errorMsg, NULL);
         RETURN QUERY SELECT * FROM debug_output;
+        RETURN;
     END IF;
     IF offerRecord.rounding_step_size IS NULL THEN
         errorMsg := 'rounding_step_size of offer with id ' || distr_off_id || ' is invalid';
         RAISE NOTICE '%', errorMsg;
         INSERT INTO debug_output (level, message, data) VALUES ('error', errorMsg, NULL);
         RETURN QUERY SELECT * FROM debug_output;
+        RETURN;
     END IF;
     IF offerRecord.unit_size IS NULL THEN
         errorMsg := 'unit_size of offer with id ' || distr_off_id || ' is invalid';
         RAISE NOTICE '%', errorMsg;
         INSERT INTO debug_output (level, message, data) VALUES ('error', errorMsg, NULL);
         RETURN QUERY SELECT * FROM debug_output;
+        RETURN;
     END IF;
     IF offerRecord.unit_count IS NULL THEN
         errorMsg := 'unit_count of offer with id ' || distr_off_id || ' is invalid';
         RAISE NOTICE '%', errorMsg;
         INSERT INTO debug_output (level, message, data) VALUES ('error', errorMsg, NULL);
         RETURN QUERY SELECT * FROM debug_output;
+        RETURN;
     END IF;
 
     -- Assign rounding step size
@@ -131,6 +137,7 @@ BEGIN
         RAISE NOTICE '%', errorMsg;
         INSERT INTO debug_output (level, message, data) VALUES ('error', errorMsg, NULL);
         RETURN QUERY SELECT * FROM debug_output;
+        RETURN;
     END IF;
 
     -- Calculate target total quantity considering total_amount_adjusted if available
