@@ -41,6 +41,13 @@ BEGIN
     -- Create temporary table for debug output
     CREATE TEMP TABLE debug_output(level TEXT, message TEXT, data JSONB);
 
+    -- Track input information
+    errorMsg := 'Input distribution id: ' || distr_off_id || ', debug: ' || debug || ', update_orders: ' || update_orders;
+    RAISE INFO '%', errorMsg;
+    INSERT INTO debug_output (level, message, data) VALUES ('info', 'inputDistrId', to_jsonb(distr_off_id));
+    INSERT INTO debug_output (level, message, data) VALUES ('info', 'inputDebug', to_jsonb(debug));
+    INSERT INTO debug_output (level, message, data) VALUES ('info', 'inputUpdateOrders', to_jsonb(update_orders));
+
     -- Select all valid distributions orders without quantity 0 and create a temporary table
     CREATE TEMP TABLE validOrders AS
     SELECT
@@ -324,4 +331,4 @@ SELECT total, total_adjusted FROM distributions_offers WHERE id = 13372;
 UPDATE distributions_offers SET total_adjusted = NULL WHERE id = 13372;
 UPDATE distributions_offers SET total_adjusted = 20.0 WHERE id = 13372;
 
-SELECT kp__adjust_orders(12, TRUE, FALSE);
+SELECT kp__rounding_orders(13372, TRUE, FALSE);
