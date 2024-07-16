@@ -6,6 +6,7 @@ CREATE OR REPLACE FUNCTION kp__adjust_orders(
     updateOrders BOOL
 ) RETURNS TABLE(description TEXT, data JSONB) LANGUAGE plpgsql AS $$
 DECLARE
+    errorMsg TEXT;
     offerRecord RECORD;
     roundingStepSize NUMERIC := 0;
     unitTotalSize NUMERIC := 0;
@@ -31,6 +32,9 @@ BEGIN
     -- Start time
     startTime := CLOCK_TIMESTAMP();
 
+    -- Create temporary table for debug output
+    CREATE TEMP TABLE debug_output(description TEXT, data JSONB, error TEXT);
+
     -- Select all valid distributions orders without quantity 0 and create a temporary table
     CREATE TEMP TABLE validOrders AS
     SELECT
@@ -42,8 +46,11 @@ BEGIN
     WHERE distributions_offer = distr_off_id AND quantity <> 0;
 
     IF NOT EXISTS (SELECT 1 FROM validOrders) THEN
-        RAISE EXCEPTION 'No distributions orders with quantity larger than 0 found for offer id %', distr_off_id;
-        RETURN;
+        errorMsg := 'No distributions orders with quantity larger than 0 found for offer id ' || distr_off_id;
+        RAISE NOTICE '%', errorMsg;
+        INSERT INTO debug_output
+        SELECT 'Error' AS description, NULL::JSONB, errorMsg;
+        RETURN QUERY SELECT * FROM debug_output;
     END IF;
 
     -- Select the distribution offer details
@@ -124,7 +131,7 @@ BEGIN
     FOR orderRecord IN SELECT * FROM validOrders LOOP
         IF NOT orderRecord.quantity_adjusted_locked THEN
             adjustedQuantity := orderRecord.quantity * scaleFactor;
-            adjustedQuantity := ROUND(adjustedQuantity / roundingStepSize) * roundingStepSize;
+            adjustedQuantity := ROUND(adjustedQuantity / roundingStepSize, 3) * roundingStepSize;
             adjustedQuantity := GREATEST(0, adjustedQuantity);
             UPDATE adjustedOrders
             SET quantity_adjusted = adjustedQuantity
@@ -149,7 +156,7 @@ BEGIN
     -- Remaining diff is larger than 0 and has not locked orders
     IF remainingDifference <> 0 AND nonLockedOrderCount > 0 THEN
         remainingDiffStep := roundingStepSize * SIGN(remainingDifference);
-        remainingDiffSteps := ROUND(ABS(remainingDifference) / roundingStepSize);
+        remainingDiffSteps := ROUND(ABS(remainingDifference) / roundingStepSize, 3);
 
         -- Distribute the remaining difference across non-locked orders
         FOR remainingDiffPos IN 0..(remainingDiffSteps - 1) LOOP
@@ -243,8 +250,7 @@ BEGIN
     -- Calculate total adjusted quantity
     SELECT SUM(COALESCE(quantity_adjusted, 0))
     INTO finalTotalAdjustedQuantity
-    FROM distributions_orders
-    WHERE distributions_offer = distr_off_id;
+    FROM finalOrders;
 
     -- End time
     endTime := CLOCK_TIMESTAMP();
@@ -252,6 +258,7 @@ BEGIN
 
     -- Debugging output
     IF debug THEN
+        RAISE NOTICE 'Offer: %', (row_to_json(offerRecord));
         RAISE NOTICE 'Origin: %', (SELECT array_agg(row_to_json(originOrders)) FROM originOrders);
         RAISE NOTICE 'Adjusted: %', (SELECT array_agg(row_to_json(finalOrders)) FROM finalOrders);
         RAISE NOTICE 'Total ordered: %', finalTotalOrderedQuantity;
@@ -259,10 +266,11 @@ BEGIN
         RAISE NOTICE 'Time taken: % milliseconds', EXTRACT(EPOCH FROM timeDiff) * 1000;
     END IF;
 
-    -- Create temporary table for debug output
-    CREATE TEMP TABLE debug_output(description TEXT, data JSONB);
+
 
     -- Collect debug data
+    INSERT INTO debug_output
+    SELECT 'Offer' AS description, row_to_json(offerRecord);
     INSERT INTO debug_output
     SELECT 'Origin Orders' AS description, row_to_json(vo) AS data FROM originOrders vo;
     INSERT INTO debug_output
@@ -280,5 +288,10 @@ END;
 $$;
 
 SELECT * FROM distributions_orders ORDER BY id DESC LIMIT 100;
+
+SELECT total, total_adjusted FROM distributions_offers WHERE id = 13372;
+
+UPDATE distributions_offers SET total_adjusted = NULL WHERE id = 13372;
+UPDATE distributions_offers SET total_adjusted = 20.0 WHERE id = 13372;
 
 SELECT kp__adjust_orders(13372, TRUE, FALSE);
