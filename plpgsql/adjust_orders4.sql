@@ -13,7 +13,6 @@ DECLARE
     adjustedQuantity NUMERIC;
     currentTotalAdjusted NUMERIC := 0;
     remainingDifference NUMERIC;
-    nonLockedOrderRecord RECORD;
     nonLockedOrderCount INTEGER;
     remainingDiffStep NUMERIC;
     remainingDiffSteps INTEGER;
@@ -29,21 +28,18 @@ BEGIN
     -- Start time
     startTime := CLOCK_TIMESTAMP();
 
-    -- Select all distributions orders
-    -- create a temporary table. Table is automatically destroyed after leaving
-    -- function
-    CREATE TEMP TABLE orders AS
+    -- Select all valid distributions orders without quantity 0 and create a temporary table
+    CREATE TEMP TABLE validOrders AS
     SELECT
         "id",
         quantity,
         quantity_adjusted,
-        quantity_adjusted_locked,
-        rounding_error
-        FROM distributions_orders
-        -- Filter out orders with quantity 0
-        WHERE distributions_offer = distr_off_id;
-    IF NOT EXISTS (SELECT 1 FROM orders) THEN
-        RAISE EXCEPTION 'No distributions orders found for offer id %', distr_off_id;
+        quantity_adjusted_locked
+    FROM distributions_orders
+    WHERE distributions_offer = distr_off_id AND quantity <> 0;
+
+    IF NOT EXISTS (SELECT 1 FROM validOrders) THEN
+        RAISE EXCEPTION 'No distributions orders with quantity larger than 0 found for offer id %', distr_off_id;
         RETURN;
     END IF;
 
@@ -93,26 +89,6 @@ BEGIN
         roundingStepSize := offerRecord.step_size;
     END IF;
 
-    -- Select all valid distributions orders without quantity 0
-    CREATE TEMP TABLE validOrders AS
-    SELECT
-        "id",
-        quantity,
-        quantity_adjusted,
-        quantity_adjusted_locked,
-        rounding_error
-        FROM distributions_orders
-        -- Filter out orders with quantity 0
-        WHERE distributions_offer = distr_off_id AND quantity <> 0;
-    IF NOT EXISTS (SELECT 1 FROM validOrders) THEN
-        RAISE EXCEPTION 'No distributions orders with quantity larger than 0 found for offer id %', distr_off_id;
-        RETURN;
-    END IF;
-
-    IF debug THEN
-        RAISE NOTICE 'Valid Orders: %', (SELECT array_agg(row_to_json(validOrders)) FROM validOrders);
-    END IF;
-
     -- Total size and total ordered quantity
     unitTotalSize := offerRecord.unit_size * offerRecord.unit_count;
 
@@ -159,19 +135,13 @@ BEGIN
     FROM adjustedOrders;
 
     -- Calculate the remaining difference
-    remainingDifference := adjustedTotalQuantity - currentTotalAdjusted;
+    remainingDifference := targetTotalQuantity - currentTotalAdjusted;
     IF debug THEN
         RAISE NOTICE 'Remaining difference: %', remainingDifference;
     END IF;
 
-    -- Create a temporary table for non-locked orders
-    CREATE TEMP TABLE nonLockedOrders AS
-    SELECT *
-    FROM adjustedOrders
-    WHERE NOT quantity_adjusted_locked;
-
     -- Get the count of non-locked orders
-    SELECT COUNT(*) INTO nonLockedOrderCount FROM nonLockedOrders;
+    SELECT COUNT(*) INTO nonLockedOrderCount FROM adjustedOrders WHERE NOT quantity_adjusted_locked;
 
     -- Remaining diff is larger than 0 and has not locked orders
     IF remainingDifference <> 0 AND nonLockedOrderCount > 0 THEN
@@ -180,9 +150,9 @@ BEGIN
 
         -- Distribute the remaining difference across non-locked orders
         FOR remainingDiffPos IN 0..(remainingDiffSteps - 1) LOOP
-            UPDATE nonLockedOrders
+            UPDATE adjustedOrders
             SET quantity_adjusted = quantity_adjusted + remainingDiffStep
-            WHERE id = (SELECT id FROM nonLockedOrders OFFSET remainingDiffPos % nonLockedOrderCount LIMIT 1);
+            WHERE id = (SELECT id FROM adjustedOrders WHERE NOT quantity_adjusted_locked OFFSET remainingDiffPos % nonLockedOrderCount LIMIT 1);
         END LOOP;
 
         -- Calculate the index for the next non-locked order
@@ -192,15 +162,15 @@ BEGIN
         END;
 
         -- Recalculate the remaining difference
-        SELECT adjustedTotalQuantity - SUM(COALESCE(quantity_adjusted, 0))
+        SELECT targetTotalQuantity - SUM(COALESCE(quantity_adjusted, 0))
         INTO remainingDifference
         FROM adjustedOrders;
 
         -- Adjust the first non-locked order if there is still a remaining difference
         IF remainingDifference <> 0 THEN
-            UPDATE nonLockedOrders
+            UPDATE adjustedOrders
             SET quantity_adjusted = quantity_adjusted + remainingDifference
-            WHERE id = (SELECT id FROM nonLockedOrders OFFSET remainingDiffPos LIMIT 1);
+            WHERE id = (SELECT id FROM adjustedOrders WHERE NOT quantity_adjusted_locked OFFSET remainingDiffPos LIMIT 1);
         END IF;
     END IF;
 
@@ -215,7 +185,7 @@ BEGIN
     FROM distributions_orders
     WHERE distributions_offer = distr_off_id;
 
-    -- Set finalOrders with the adjusted values from nonLockedOrders
+    -- Set finalOrders with the adjusted values from adjustedOrders
     FOR finalOrder IN SELECT * FROM orders LOOP
         IF finalOrder.quantity = 0 THEN
             UPDATE finalOrders
@@ -224,7 +194,7 @@ BEGIN
         ELSE
             SELECT *
             INTO adjustedOrder
-            FROM nonLockedOrders
+            FROM adjustedOrders
             WHERE id = finalOrder.id;
 
             IF (adjustedOrder.quantity_adjusted IS NOT NULL AND adjustedOrder.quantity_adjusted < 0) THEN
@@ -240,19 +210,29 @@ BEGIN
         END IF;
     END LOOP;
 
-    -- End time
-    endTime := CLOCK_TIMESTAMP();
-    timeDiff := endTime - startTime;
+    -- Update distributions_orders with finalOrders
+    FOR finalOrder IN SELECT * FROM finalOrders LOOP
+        UPDATE distributions_orders
+        SET quantity_adjusted = finalOrder.quantity_adjusted,
+            rounding_error = finalOrder.rounding_error
+        WHERE id = finalOrder.id;
+    END LOOP;
 
     -- Calculate total ordered quantity
     SELECT SUM(COALESCE(quantity, 0))
     INTO finalTotalOrderedQuantity
-    FROM finalOrders;
+    FROM distributions_orders
+    WHERE distributions_offer = distr_off_id;
 
     -- Calculate total adjusted quantity
     SELECT SUM(COALESCE(quantity_adjusted, 0))
     INTO finalTotalAdjustedQuantity
-    FROM finalOrders;
+    FROM distributions_orders
+    WHERE distributions_offer = distr_off_id;
+
+    -- End time
+    endTime := CLOCK_TIMESTAMP();
+    timeDiff := endTime - startTime;
 
     -- Debugging output
     IF debug THEN
@@ -262,12 +242,5 @@ BEGIN
         RAISE NOTICE 'Time taken: % milliseconds', EXTRACT(EPOCH FROM timeDiff) * 1000;
     END IF;
 
-     -- Update distributions_orders with finalOrders
-    FOR finalOrder IN SELECT * FROM finalOrders LOOP
-        UPDATE distributions_orders
-        SET quantity_adjusted = finalOrder.quantity_adjusted,
-            rounding_error = finalOrder.rounding_error
-        WHERE id = finalOrder.id;
-    END LOOP;
 END;
 $$;
