@@ -52,6 +52,7 @@ BEGIN
     CREATE TEMP TABLE validOrders AS
     SELECT
         "id",
+        distributions_offer,
         quantity,
         quantity_adjusted,
         quantity_adjusted_locked
@@ -69,6 +70,7 @@ BEGIN
 
     -- Select the distribution offer details
     SELECT
+        "id",
         (cloned_offer->>'unit_count')::NUMERIC AS unit_count,
         (cloned_offer->>'unit_size')::NUMERIC AS unit_size,
         (cloned_offer->>'step_size')::NUMERIC AS step_size,
@@ -76,7 +78,7 @@ BEGIN
         total_adjusted
     INTO offerRecord
     FROM distributions_offers
-    WHERE id = distr_off_id;
+    WHERE "id" = distr_off_id;
 
     debugOffer := row_to_json(offerRecord);
     IF debug THEN
@@ -236,6 +238,7 @@ BEGIN
     CREATE TEMP TABLE finalOrders AS
     SELECT
         "id",
+        distributions_offer,
         quantity,
         quantity_adjusted,
         quantity_adjusted_locked,
@@ -273,6 +276,7 @@ BEGIN
     CREATE TEMP TABLE originOrders AS
     SELECT
         "id",
+        distributions_offer,
         quantity,
         quantity_adjusted,
         quantity_adjusted_locked,
