@@ -1,6 +1,7 @@
 CREATE OR REPLACE FUNCTION kp__adjust_orders(
     distr_off_id bigint,
-    debug BOOL
+    debug BOOL,
+    updateOrders BOOL
 ) RETURNS void LANGUAGE plpgsql AS $$
 DECLARE
     offerRecord RECORD;
@@ -211,12 +212,14 @@ BEGIN
     END LOOP;
 
     -- Update distributions_orders with finalOrders
-    FOR finalOrder IN SELECT * FROM finalOrders LOOP
-        UPDATE distributions_orders
-        SET quantity_adjusted = finalOrder.quantity_adjusted,
-            rounding_error = finalOrder.rounding_error
-        WHERE id = finalOrder.id;
-    END LOOP;
+    IF updateOrders THEN
+        FOR finalOrder IN SELECT * FROM finalOrders LOOP
+            UPDATE distributions_orders
+            SET quantity_adjusted = finalOrder.quantity_adjusted,
+                rounding_error = finalOrder.rounding_error
+            WHERE id = finalOrder.id;
+        END LOOP;
+    END IF;
 
     -- Calculate total ordered quantity
     SELECT SUM(COALESCE(quantity, 0))
