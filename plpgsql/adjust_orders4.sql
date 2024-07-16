@@ -60,7 +60,7 @@ BEGIN
     WHERE distributions_offer = distr_off_id AND quantity <> 0;
 
     IF NOT EXISTS (SELECT 1 FROM validOrders) THEN
-        errorMsg := 'No distributions orders with quantity larger than 0 found for offer id ' || distr_off_id;
+        errorMsg := 'No distributions orders with quantity larger than 0 found for offer id ' || distr_off_id || '. Maybe you dont have access to this distribution, check your role and in which koops you have access.';
         RAISE INFO '%', errorMsg;
         INSERT INTO debug_output (level, message, data) VALUES ('error', errorMsg, NULL);
         RETURN QUERY SELECT * FROM debug_output;
@@ -142,8 +142,28 @@ BEGIN
     -- Total size and total ordered quantity
     unitTotalSize := offerRecord.unit_size * offerRecord.unit_count;
 
-    -- Calculate total ordered quantity considering adjusted quantity if available
-    SELECT COALESCE(SUM(COALESCE(quantity_adjusted, quantity)), 0)
+    -- Select all distributions orders before updating
+    CREATE TEMP TABLE originOrders AS
+    SELECT
+        "id",
+        distributions_offer,
+        quantity,
+        quantity_adjusted,
+        quantity_adjusted_locked,
+        rounding_error
+    FROM distributions_orders
+    WHERE distributions_offer = distr_off_id;
+
+    debugOriginOrders := (SELECT json_agg(row_to_json(originOrders)) FROM originOrders);
+
+    -- Debugging output origin orders
+    IF debug THEN
+        RAISE INFO 'Origin: %', debugOriginOrders;
+    END IF;
+    INSERT INTO debug_output (level, message, data) VALUES ('info', 'originOrders', debugOriginOrders);
+
+    -- Calculate total ordered quantity
+    SELECT SUM(COALESCE(NULLIF(quantity_adjusted, 0), quantity))
     INTO totalOrderedQuantity
     FROM validOrders;
 
@@ -245,6 +265,7 @@ BEGIN
         rounding_error
     FROM distributions_orders
     WHERE distributions_offer = distr_off_id;
+
     -- Set finalOrders with the adjusted values from adjustedOrders
     FOR finalOrder IN SELECT * FROM finalOrders LOOP
         IF finalOrder.quantity = 0 THEN
@@ -272,18 +293,6 @@ BEGIN
         END IF;
     END LOOP;
 
-    -- Select all distributions orders before updating
-    CREATE TEMP TABLE originOrders AS
-    SELECT
-        "id",
-        distributions_offer,
-        quantity,
-        quantity_adjusted,
-        quantity_adjusted_locked,
-        rounding_error
-    FROM distributions_orders
-    WHERE distributions_offer = distr_off_id;
-
     -- Update distributions_orders with finalOrders
     IF update_orders THEN
         FOR finalOrder IN SELECT * FROM finalOrders LOOP
@@ -309,7 +318,6 @@ BEGIN
     endTime := CLOCK_TIMESTAMP();
     timeDiff := endTime - startTime;
 
-    debugOriginOrders := (SELECT json_agg(row_to_json(originOrders)) FROM originOrders);
     debugFinalOrders := (SELECT json_agg(row_to_json(finalOrders)) FROM finalOrders);
     debugTotalOrderedQuantity := to_jsonb(finalTotalOrderedQuantity);
     debugTotalAdjustedQuantity := to_jsonb(finalTotalAdjustedQuantity);
@@ -317,14 +325,12 @@ BEGIN
 
     -- Debugging output
     IF debug THEN
-        RAISE INFO 'Origin: %', debugOriginOrders;
         RAISE INFO 'Adjusted: %', debugFinalOrders;
         RAISE INFO 'Total ordered: %', finalTotalOrderedQuantity;
         RAISE INFO 'Total adjusted: %', finalTotalAdjustedQuantity;
         RAISE INFO 'Time taken: % milliseconds', debugTimeTaken;
     END IF;
 
-    INSERT INTO debug_output (level, message, data) VALUES ('info', 'originOrders', debugOriginOrders);
     INSERT INTO debug_output (level, message, data) VALUES ('info', 'adjustedOrders', debugFinalOrders);
     INSERT INTO debug_output (level, message, data) VALUES ('info', 'totalOrdered', debugTotalOrderedQuantity);
     INSERT INTO debug_output (level, message, data) VALUES ('info', 'totalAdjusted', debugTotalAdjustedQuantity);
@@ -344,4 +350,4 @@ SELECT total, total_adjusted FROM distributions_offers WHERE id = 13372;
 UPDATE distributions_offers SET total_adjusted = NULL WHERE id = 13372;
 UPDATE distributions_offers SET total_adjusted = 20.0 WHERE id = 13372;
 
-SELECT kp__rounding_orders(13372, TRUE, FALSE);
+SELECT kp__rounding_orders(12532, TRUE, FALSE);
