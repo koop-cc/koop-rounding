@@ -1,6 +1,6 @@
-DROP FUNCTION IF EXISTS kp__adjust_orders(bigint, BOOL, BOOL);
+DROP FUNCTION IF EXISTS kp__rounding_orders(bigint, BOOL, BOOL);
 
-CREATE OR REPLACE FUNCTION kp__adjust_orders(
+CREATE OR REPLACE FUNCTION kp__rounding_orders(
     distr_off_id bigint,
     debug BOOL,
     update_orders BOOL
