@@ -307,10 +307,10 @@ BEGIN
     END IF;
 
     INSERT INTO debug_output (level, message, data) VALUES ('info', 'originOrders', debugOriginOrders);
-    INSERT INTO debug_output (level, message, data) VALUES ('info','adjustedOrders', debugFinalOrders);
-    INSERT INTO debug_output (level, message, data) VALUES ('info','totalOrdered', debugTotalOrderedQuantity);
-    INSERT INTO debug_output (level, message, data) VALUES ('info','totalAdjusted', debugTotalAdjustedQuantity);
-    INSERT INTO debug_output (level, message, data) VALUES ('info','timeTakenMs', debugTimeTaken);
+    INSERT INTO debug_output (level, message, data) VALUES ('info', 'adjustedOrders', debugFinalOrders);
+    INSERT INTO debug_output (level, message, data) VALUES ('info', 'totalOrdered', debugTotalOrderedQuantity);
+    INSERT INTO debug_output (level, message, data) VALUES ('info', 'totalAdjusted', debugTotalAdjustedQuantity);
+    INSERT INTO debug_output (level, message, data) VALUES ('info', 'timeTakenMs', debugTimeTaken);
 
     -- Return debug data
     RETURN QUERY SELECT * FROM debug_output;
