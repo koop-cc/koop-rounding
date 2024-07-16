@@ -63,6 +63,7 @@ BEGIN
         RAISE INFO '%', errorMsg;
         INSERT INTO debug_output (level, message, data) VALUES ('error', errorMsg, NULL);
         RETURN QUERY SELECT * FROM debug_output;
+        DROP TABLE IF EXISTS debug_output, validOrders, adjustedOrders, finalOrders, originOrders;
         RETURN;
     END IF;
 
@@ -89,6 +90,7 @@ BEGIN
         RAISE NOTICE '%', errorMsg;
         INSERT INTO debug_output (level, message, data) VALUES ('error', errorMsg, NULL);
         RETURN QUERY SELECT * FROM debug_output;
+        DROP TABLE IF EXISTS debug_output, validOrders, adjustedOrders, finalOrders, originOrders;
         RETURN;
     END IF;
     IF offerRecord.step_size IS NULL THEN
@@ -96,6 +98,7 @@ BEGIN
         RAISE NOTICE '%', errorMsg;
         INSERT INTO debug_output (level, message, data) VALUES ('error', errorMsg, NULL);
         RETURN QUERY SELECT * FROM debug_output;
+        DROP TABLE IF EXISTS debug_output, validOrders, adjustedOrders, finalOrders, originOrders;
         RETURN;
     END IF;
     IF offerRecord.rounding_step_size IS NULL THEN
@@ -103,6 +106,7 @@ BEGIN
         RAISE NOTICE '%', errorMsg;
         INSERT INTO debug_output (level, message, data) VALUES ('error', errorMsg, NULL);
         RETURN QUERY SELECT * FROM debug_output;
+        DROP TABLE IF EXISTS debug_output, validOrders, adjustedOrders, finalOrders, originOrders;
         RETURN;
     END IF;
     IF offerRecord.unit_size IS NULL THEN
@@ -110,6 +114,7 @@ BEGIN
         RAISE NOTICE '%', errorMsg;
         INSERT INTO debug_output (level, message, data) VALUES ('error', errorMsg, NULL);
         RETURN QUERY SELECT * FROM debug_output;
+        DROP TABLE IF EXISTS debug_output, validOrders, adjustedOrders, finalOrders, originOrders;
         RETURN;
     END IF;
     IF offerRecord.unit_count IS NULL THEN
@@ -117,6 +122,7 @@ BEGIN
         RAISE NOTICE '%', errorMsg;
         INSERT INTO debug_output (level, message, data) VALUES ('error', errorMsg, NULL);
         RETURN QUERY SELECT * FROM debug_output;
+        DROP TABLE IF EXISTS debug_output, validOrders, adjustedOrders, finalOrders, originOrders;
         RETURN;
     END IF;
 
@@ -144,6 +150,7 @@ BEGIN
         RAISE NOTICE '%', errorMsg;
         INSERT INTO debug_output (level, message, data) VALUES ('error', errorMsg, NULL);
         RETURN QUERY SELECT * FROM debug_output;
+        DROP TABLE IF EXISTS debug_output, validOrders, adjustedOrders, finalOrders, originOrders;
         RETURN;
     END IF;
 
@@ -321,6 +328,8 @@ BEGIN
 
     -- Return debug data
     RETURN QUERY SELECT * FROM debug_output;
+    DROP TABLE IF EXISTS debug_output, validOrders, adjustedOrders, finalOrders, originOrders;
+    RETURN;
 END;
 $$;
 
