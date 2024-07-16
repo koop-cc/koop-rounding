@@ -1,5 +1,6 @@
 CREATE OR REPLACE FUNCTION kp__adjust_orders(
-    distr_off_id bigint
+    distr_off_id bigint,
+    debug BOOL
 ) RETURNS void LANGUAGE plpgsql AS $$
 DECLARE
     offerRecord RECORD;
@@ -7,26 +8,30 @@ DECLARE
     unitTotalSize NUMERIC := 0;
     totalOrderedQuantity NUMERIC := 0;
     orderRecord RECORD;
-    adjustedTotalQuantity NUMERIC;
+    targetTotalQuantity NUMERIC;
     scaleFactor NUMERIC;
     adjustedQuantity NUMERIC;
     currentTotalAdjusted NUMERIC := 0;
     remainingDifference NUMERIC;
     nonLockedOrderRecord RECORD;
     nonLockedOrderCount INTEGER;
+    remainingDiffStep NUMERIC;
+    remainingDiffSteps INTEGER;
+    remainingDiffPos INTEGER;
 BEGIN
-    -- Select all valid distributions orders without quantity 0 and
+    -- Select all distributions orders
     -- create a temporary table. Table is automatically destroyed after leaving
     -- function
-    CREATE TEMP TABLE validOrders AS
+    CREATE TEMP TABLE orders AS
     SELECT
         distributions_orders."id",
         distributions_orders.quantity,
         distributions_orders.quantity_adjusted,
         distributions_orders.quantity_adjusted_locked
         FROM distributions_orders
-        WHERE distributions_offer = distr_off_id AND quantity <> 0;
-    IF NOT EXISTS (SELECT 1 FROM validOrders) THEN
+        -- Filter out orders with quantity 0
+        WHERE distributions_offer = distr_off_id;
+    IF NOT EXISTS (SELECT 1 FROM orders) THEN
         RAISE EXCEPTION 'No distributions orders found for offer id %', distr_off_id;
         RETURN;
     END IF;
@@ -41,6 +46,10 @@ BEGIN
     INTO offerRecord
     FROM distributions_offers
     WHERE id = distr_off_id;
+
+    IF debug THEN
+        RAISE NOTICE 'Offer: %', row_to_json(offerRecord);
+    END IF;
 
     -- Check offer requirements setups
     IF offerRecord IS NULL THEN
@@ -66,45 +75,65 @@ BEGIN
 
     -- Assign rounding step size
     roundingStepSize := offerRecord.rounding_step_size;
+
     -- Ensure step_size is not smaller than rounding_step_size
     IF offerRecord.step_size < offerRecord.rounding_step_size THEN
         RAISE NOTICE 'Rounding step size is larger than step size, setting rounding step size to step size.';
         roundingStepSize := offerRecord.step_size;
     END IF;
 
+        -- Select all valid distributions orders without quantity 0
+    CREATE TEMP TABLE validOrders AS
+    SELECT
+        distributions_orders."id",
+        distributions_orders.quantity,
+        distributions_orders.quantity_adjusted,
+        distributions_orders.quantity_adjusted_locked
+        FROM distributions_orders
+        -- Filter out orders with quantity 0
+        WHERE distributions_offer = distr_off_id AND quantity <> 0;
+    IF NOT EXISTS (SELECT 1 FROM validOrders) THEN
+        RAISE EXCEPTION 'No distributions orders found for offer id %', distr_off_id;
+        RETURN;
+    END IF;
+
+    IF debug THEN
+        RAISE NOTICE 'Valid Orders: %', (SELECT array_agg(row_to_json(validOrders)) FROM validOrders);
+    END IF;
+
     -- Total size and total ordered quantity
     unitTotalSize := offerRecord.unit_size * offerRecord.unit_count;
-    SELECT SUM(quantity)
+
+    -- Calculate total ordered quantity considering adjusted quantity if available
+    SELECT COALESCE(SUM(COALESCE(quantity_adjusted, quantity)), 0)
     INTO totalOrderedQuantity
     FROM validOrders;
 
     IF totalOrderedQuantity = 0 THEN
-        FOR orderRecord IN SELECT * FROM validOrders LOOP
-            UPDATE distributions_orders
-            SET quantity_adjusted = orderRecord.quantity
-            WHERE id = orderRecord.id;
-        END LOOP;
+        RAISE NOTICE 'Total ordered quantity is 0, exit function.'
         RETURN; -- Exit the function here if totalOrderedQuantity is 0
     END IF;
 
-    -- Round up target quantity to the next multiple of the unit size
-    adjustedTotalQuantity := CEIL(totalOrderedQuantity / unitTotalSize) * unitTotalSize;
+    -- Calculate target total quantity considering total_amount_adjusted if available
+    targetTotalQuantity := COALESCE(offerRecord.total_adjusted, ROUND(totalOrderedQuantity / unitTotalSize) * unitTotalSize);
+    IF debug THEN
+        RAISE NOTICE 'Target Total Adjusted Quantity: %', targetTotalQuantity;
+    END IF;
 
     -- Calculate scaling factor
-    scaleFactor := adjustedTotalQuantity / totalOrderedQuantity;
+    scaleFactor := targetTotalQuantity / totalOrderedQuantity;
+    IF debug THEN
+        RAISE NOTICE 'Scale factor: %', scaleFactor;
+    END IF;
 
     -- Initial adjustment of order quantities
     CREATE TEMP TABLE adjustedOrders AS
     SELECT * FROM validOrders;
 
     FOR orderRecord IN SELECT * FROM validOrders LOOP
-        IF orderRecord.quantity_adjusted_locked THEN
-            UPDATE adjustedOrders
-            SET quantity_adjusted = orderRecord.quantity
-            WHERE id = orderRecord.id;
-        ELSE
+        IF NOT orderRecord.quantity_adjusted_locked THEN
             adjustedQuantity := orderRecord.quantity * scaleFactor;
-            adjustedQuantity := ROUND((adjustedQuantity + 1e-9) / roundingStepSize) * roundingStepSize;
+            adjustedQuantity := ROUND(adjustedQuantity / roundingStepSize) * roundingStepSize;
             adjustedQuantity := GREATEST(0, adjustedQuantity);
             UPDATE adjustedOrders
             SET quantity_adjusted = adjustedQuantity
@@ -119,6 +148,9 @@ BEGIN
 
     -- Calculate the remaining difference
     remainingDifference := adjustedTotalQuantity - currentTotalAdjusted;
+    IF debug THEN
+        RAISE NOTICE 'Remaining difference: %', remainingDifference;
+    END IF;
 
     -- Create a temporary table for non-locked orders
     CREATE TEMP TABLE nonLockedOrders AS
@@ -129,6 +161,36 @@ BEGIN
     -- Get the count of non-locked orders
     SELECT COUNT(*) INTO nonLockedOrderCount FROM nonLockedOrders;
 
-    
+    -- Remaining diff is larger than 0 and has not locked orders
+    IF remainingDifference <> 0 AND nonLockedOrderCount > 0 THEN
+        remainingDiffStep := roundingStepSize * SIGN(remainingDifference);
+        remainingDiffSteps := ROUND(ABS(remainingDifference) / roundingStepSize);
+
+        -- Distribute the remaining difference across non-locked orders
+        FOR remainingDiffPos IN 0..(remainingDiffSteps - 1) LOOP
+            UPDATE nonLockedOrders
+            SET quantity_adjusted = quantity_adjusted + remainingDiffStep
+            WHERE id = (SELECT id FROM nonLockedOrders OFFSET remainingDiffPos % nonLockedOrderCount LIMIT 1);
+        END LOOP;
+
+        -- Calculate the index for the next non-locked order
+        remainingDiffPos := CASE
+            WHEN nonLockedOrderCount > (remainingDiffPos % nonLockedOrderCount) - 1 THEN 0
+            ELSE remainingDiffPos + 1
+        END;
+
+        -- Recalculate the remaining difference
+        SELECT adjustedTotalQuantity - SUM(COALESCE(quantity_adjusted, 0))
+        INTO remainingDifference
+        FROM adjustedOrders;
+
+        -- Adjust the first non-locked order if there is still a remaining difference
+        IF remainingDifference <> 0 THEN
+            UPDATE nonLockedOrders
+            SET quantity_adjusted = quantity_adjusted + remainingDifference
+            WHERE id = (SELECT id FROM nonLockedOrders OFFSET remainingDiffPos LIMIT 1);
+        END IF;
+    END IF;
+
 END;
 $$;
