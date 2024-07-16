@@ -1,8 +1,10 @@
+DROP FUNCTION IF EXISTS kp__adjust_orders(bigint, BOOL, BOOL);
+
 CREATE OR REPLACE FUNCTION kp__adjust_orders(
     distr_off_id bigint,
     debug BOOL,
     updateOrders BOOL
-) RETURNS void LANGUAGE plpgsql AS $$
+) RETURNS TABLE(description TEXT, data JSONB) LANGUAGE plpgsql AS $$
 DECLARE
     offerRecord RECORD;
     roundingStepSize NUMERIC := 0;
@@ -187,7 +189,7 @@ BEGIN
     WHERE distributions_offer = distr_off_id;
 
     -- Set finalOrders with the adjusted values from adjustedOrders
-    FOR finalOrder IN SELECT * FROM orders LOOP
+    FOR finalOrder IN SELECT * FROM finalOrders LOOP
         IF finalOrder.quantity = 0 THEN
             UPDATE finalOrders
             SET quantity_adjusted = finalOrder.quantity
@@ -210,6 +212,17 @@ BEGIN
             END IF;
         END IF;
     END LOOP;
+
+    -- Select all distributions orders before updating
+    CREATE TEMP TABLE originOrders AS
+    SELECT
+        "id",
+        quantity,
+        quantity_adjusted,
+        quantity_adjusted_locked,
+        rounding_error
+    FROM distributions_orders
+    WHERE distributions_offer = distr_off_id;
 
     -- Update distributions_orders with finalOrders
     IF updateOrders THEN
@@ -239,11 +252,33 @@ BEGIN
 
     -- Debugging output
     IF debug THEN
-        RAISE NOTICE 'Output: %', (SELECT array_agg(row_to_json(finalOrders)) FROM finalOrders);
-        RAISE NOTICE 'Ordered: %', finalTotalOrderedQuantity;
-        RAISE NOTICE 'Adjusted: %', finalTotalAdjustedQuantity;
+        RAISE NOTICE 'Origin: %', (SELECT array_agg(row_to_json(originOrders)) FROM originOrders);
+        RAISE NOTICE 'Adjusted: %', (SELECT array_agg(row_to_json(finalOrders)) FROM finalOrders);
+        RAISE NOTICE 'Total ordered: %', finalTotalOrderedQuantity;
+        RAISE NOTICE 'Total adjusted: %', finalTotalAdjustedQuantity;
         RAISE NOTICE 'Time taken: % milliseconds', EXTRACT(EPOCH FROM timeDiff) * 1000;
     END IF;
 
+    -- Create temporary table for debug output
+    CREATE TEMP TABLE debug_output(description TEXT, data JSONB);
+
+    -- Collect debug data
+    INSERT INTO debug_output
+    SELECT 'Origin Orders' AS description, row_to_json(vo) AS data FROM originOrders vo;
+    INSERT INTO debug_output
+    SELECT 'Adjusted Orders' AS description, row_to_json(fo) AS data FROM finalOrders fo;
+    INSERT INTO debug_output
+    VALUES ('Total ordered', to_jsonb(finalTotalOrderedQuantity));
+    INSERT INTO debug_output
+    VALUES ('Total adjusted', to_jsonb(finalTotalAdjustedQuantity));
+    INSERT INTO debug_output
+    VALUES ('Time taken (milliseconds)', to_jsonb(EXTRACT(EPOCH FROM timeDiff) * 1000));
+
+    -- Return debug data
+    RETURN QUERY SELECT * FROM debug_output;
 END;
 $$;
+
+SELECT * FROM distributions_orders ORDER BY id DESC LIMIT 100;
+
+SELECT kp__adjust_orders(13372, TRUE, FALSE);
