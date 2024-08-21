@@ -51,13 +51,13 @@ BEGIN
     -- Select all valid distributions orders without quantity 0 and create a temporary table
     CREATE TEMP TABLE valid_orders AS
     SELECT
-        "id",
-        distributions_offer,
-        quantity,
-        quantity_adjusted,
-        quantity_adjusted_locked
-    FROM distributions_orders
-    WHERE distributions_offer = distr_off_id AND quantity <> 0;
+        distr_ord."id",
+        distr_ord.distributions_offer,
+        distr_ord.quantity,
+        distr_ord.quantity_adjusted,
+        distr_ord.quantity_adjusted_locked
+    FROM distributions_orders distr_ord
+    WHERE distr_ord.distributions_offer = distr_off_id AND distr_ord.quantity <> 0;
 
     IF NOT EXISTS (SELECT 1 FROM valid_orders) THEN
         debugMsgs := COALESCE(debugMsgs, '[]'::jsonb) || jsonb_build_array('Error: No distributions orders with quantity larger than 0 found for offer id ' || distr_off_id || '. Maybe you dont have access to this distribution, check your role and in which koops you have access.');
@@ -96,15 +96,15 @@ BEGIN
 
     -- Select the distribution offer details
     SELECT
-        "id",
-        (cloned_offer->>'unit_count')::NUMERIC AS unit_count,
-        (cloned_offer->>'unit_size')::NUMERIC AS unit_size,
-        (cloned_offer->>'step_size')::NUMERIC AS step_size,
-        (cloned_offer->>'rounding_step_size')::NUMERIC AS rounding_step_size,
-        total_adjusted
+        o."id",
+        (o.cloned_offer->>'unit_count')::NUMERIC AS unit_count,
+        (o.cloned_offer->>'unit_size')::NUMERIC AS unit_size,
+        (o.cloned_offer->>'step_size')::NUMERIC AS step_size,
+        (o.cloned_offer->>'rounding_step_size')::NUMERIC AS rounding_step_size,
+        o.total_adjusted
     INTO offerRecord
-    FROM distributions_offers
-    WHERE "id" = distr_off_id;
+    FROM distributions_offers o
+    WHERE o."id" = distr_off_id;
 
     debugOriginOffer := row_to_json(offerRecord);
 
@@ -295,14 +295,14 @@ BEGIN
     -- Select all distributions orders before updating
     CREATE TEMP TABLE origin_orders AS
     SELECT
-        "id",
-        distributions_offer,
-        quantity,
-        quantity_adjusted,
-        quantity_adjusted_locked,
-        rounding_error
-    FROM distributions_orders
-    WHERE distributions_offer = distr_off_id;
+        o."id",
+        o.distributions_offer,
+        o.quantity,
+        o.quantity_adjusted,
+        o.quantity_adjusted_locked,
+        o.rounding_error
+    FROM distributions_orders o
+    WHERE o.distributions_offer = distr_off_id;
 
     debugOriginOrders := (SELECT json_agg(row_to_json(origin_orders)) FROM origin_orders);
 
@@ -367,7 +367,7 @@ BEGIN
             adjustedQuantity := GREATEST(0, adjustedQuantity);
             UPDATE adjusted_orders
             SET quantity_adjusted = adjustedQuantity
-            WHERE id = orderRecord.id;
+            WHERE "id" = orderRecord."id";
         END IF;
     END LOOP;
 
@@ -391,7 +391,7 @@ BEGIN
         FOR remainingDiffPos IN 0..(remainingDiffSteps - 1) LOOP
             UPDATE adjusted_orders
             SET quantity_adjusted = quantity_adjusted + remainingDiffStep
-            WHERE id = (SELECT id FROM adjusted_orders WHERE NOT quantity_adjusted_locked OFFSET remainingDiffPos % nonLockedOrderCount LIMIT 1);
+            WHERE "id" = (SELECT "id" FROM adjusted_orders WHERE NOT quantity_adjusted_locked OFFSET remainingDiffPos % nonLockedOrderCount LIMIT 1);
         END LOOP;
 
         -- Calculate the index for the next non-locked order
@@ -441,7 +441,7 @@ BEGIN
                 debugMsgs := COALESCE(debugMsgs, '[]'::jsonb) || jsonb_build_array('Warning: Adjusted order id ' || adjustedOrder.id || ' is below zero (' || adjustedOrder.quantity_adjusted || ').');
                 UPDATE final_orders
                 SET quantity_adjusted = adjustedOrder.quantity_adjusted, rounding_error = 'quantity_adjusted_below_zero'
-                WHERE id = finalOrder.id;
+                WHERE "id" = finalOrder."id";
             ELSE
                 UPDATE final_orders
                 SET quantity_adjusted = COALESCE(adjustedOrder.quantity_adjusted, 0)
@@ -497,11 +497,11 @@ BEGIN
 END;
 $$;
 
+SELECT kp__rounding_orders(12532);
+
 SELECT * FROM distributions_orders ORDER BY id DESC LIMIT 100;
 
 SELECT total, total_adjusted, cloned_offer->>'step_size' AS step_size, cloned_offer->>'rounding_step_size' AS rounding_step_size FROM distributions_offers WHERE id = 12532;
 
 UPDATE distributions_offers SET total_adjusted = NULL WHERE id = 12532;
 UPDATE distributions_offers SET total_adjusted = 20.0 WHERE id = 12532;
-
-SELECT kp__rounding_orders(12532);
