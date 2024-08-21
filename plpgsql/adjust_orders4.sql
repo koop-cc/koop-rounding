@@ -5,6 +5,7 @@ CREATE OR REPLACE FUNCTION kp__rounding_orders(
 ) RETURNS TABLE(
     "id" bigint,
     distributions_offer bigint,
+    basket bigint,
     quantity numeric,
     quantity_adjusted numeric,
     quantity_adjusted_locked boolean,
@@ -42,6 +43,7 @@ BEGIN
     CREATE TEMP TABLE adjusted_orders(
         "id" bigint,
         distributions_offer bigint,
+        basket bigint,
         quantity numeric,
         quantity_adjusted numeric,
         quantity_adjusted_locked boolean,
@@ -53,6 +55,7 @@ BEGIN
     SELECT
         distributions_orders."id",
         distributions_orders.distributions_offer,
+        distributions_orders.basket,
         distributions_orders.quantity,
         distributions_orders.quantity_adjusted,
         distributions_orders.quantity_adjusted_locked
@@ -298,6 +301,7 @@ BEGIN
     SELECT
         distributions_orders."id",
         distributions_orders.distributions_offer,
+        distributions_orders.basket,
         distributions_orders.quantity,
         distributions_orders.quantity_adjusted,
         distributions_orders.quantity_adjusted_locked,
@@ -419,6 +423,7 @@ BEGIN
     SELECT
         distributions_orders."id",
         distributions_orders.distributions_offer,
+        distributions_orders.basket,
         distributions_orders.quantity,
         distributions_orders.quantity_adjusted,
         distributions_orders.quantity_adjusted_locked,
