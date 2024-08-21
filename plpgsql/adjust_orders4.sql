@@ -245,6 +245,7 @@ BEGIN
         DROP TABLE IF EXISTS valid_orders, adjusted_orders, final_orders, origin_orders;
         RETURN;
     END IF;
+    -- unit_count is by default not null, but you never know if that changes in the future
     IF offerRecord.unit_count IS NULL THEN
         debugMsgs := COALESCE(debugMsgs, '[]'::jsonb) || jsonb_build_array('Error: unit_count of offer with id ' || distr_off_id || ' is invalid');
         INSERT INTO distributions_orders_rounding
@@ -315,8 +316,8 @@ BEGIN
     ) INTO totalOrderedQuantity
     FROM valid_orders;
 
-    IF totalOrderedQuantity = 0 THEN
-        debugMsgs := COALESCE(debugMsgs, '[]'::jsonb) || jsonb_build_array('Error: Total ordered quantity is 0, exit function.');
+    IF totalOrderedQuantity <= 0 THEN
+        debugMsgs := COALESCE(debugMsgs, '[]'::jsonb) || jsonb_build_array('Error: Total ordered quantity considering quantity_adjusted_locked and sum up quantity_adjusted or then quantity is 0 or less, exit function.');
         INSERT INTO distributions_orders_rounding
             (
                 distributions_offer,
@@ -350,7 +351,7 @@ BEGIN
         RETURN;
     END IF;
 
-    -- Calculate target total quantity considering total_amount_adjusted if available
+    -- Calculate target total quantity considering total_adjusted if available
     targetTotalQuantity := COALESCE(offerRecord.total_adjusted, ROUND(totalOrderedQuantity / unitTotalSize) * unitTotalSize);
 
     -- Calculate scaling factor
