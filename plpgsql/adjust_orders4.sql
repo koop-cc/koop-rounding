@@ -1,18 +1,20 @@
-DROP FUNCTION IF EXISTS kp__rounding_orders(bigint, BOOL, BOOL);
+DROP FUNCTION IF EXISTS kp__rounding_orders(bigint);
 
 CREATE OR REPLACE FUNCTION kp__rounding_orders(
-    distr_off_id bigint,
-    debug BOOL,
-    update_orders BOOL
-) RETURNS TABLE(level TEXT, message TEXT, data JSONB) LANGUAGE plpgsql AS $$
+    distr_off_id bigint
+) RETURNS TABLE(
+    "id" bigint,
+    distributions_offer bigint,
+    quantity numeric,
+    quantity_adjusted numeric,
+    quantity_adjusted_locked boolean,
+    rounding_error kp_enum_rounding_error
+) LANGUAGE plpgsql AS $$
 DECLARE
-    errorMsg TEXT;
-    debugOffer JSONB;
+    debugMsgs JSONB;
+    debugOriginOffer JSONB;
     debugOriginOrders JSONB;
     debugFinalOrders JSONB;
-    debugTotalOrderedQuantity JSONB;
-    debugTotalAdjustedQuantity JSONB;
-    debugTimeTaken JSONB;
     offerRecord RECORD;
     roundingStepSize NUMERIC := 0;
     unitTotalSize NUMERIC := 0;
@@ -30,26 +32,24 @@ DECLARE
     finalOrder RECORD;
     adjustedOrder RECORD;
     startTime TIMESTAMP;
-    endTime TIMESTAMP;
-    timeDiff INTERVAL;
     finalTotalOrderedQuantity NUMERIC;
     finalTotalAdjustedQuantity NUMERIC;
 BEGIN
     -- Start time
     startTime := CLOCK_TIMESTAMP();
 
-    -- Create temporary table for debug output
-    CREATE TEMP TABLE debug_output(level TEXT, message TEXT, data JSONB);
-
-    -- Track input information
-    errorMsg := 'Input distribution id: ' || distr_off_id || ', debug: ' || debug || ', update_orders: ' || update_orders;
-    RAISE INFO '%', errorMsg;
-    INSERT INTO debug_output (level, message, data) VALUES ('info', 'inputDistrId', to_jsonb(distr_off_id));
-    INSERT INTO debug_output (level, message, data) VALUES ('info', 'inputDebug', to_jsonb(debug));
-    INSERT INTO debug_output (level, message, data) VALUES ('info', 'inputUpdateOrders', to_jsonb(update_orders));
+    -- Result of the adjusted orders
+    CREATE TEMP TABLE adjusted_orders(
+        "id" bigint,
+        distributions_offer bigint,
+        quantity numeric,
+        quantity_adjusted numeric,
+        quantity_adjusted_locked boolean,
+        rounding_error kp_enum_rounding_error
+    );
 
     -- Select all valid distributions orders without quantity 0 and create a temporary table
-    CREATE TEMP TABLE validOrders AS
+    CREATE TEMP TABLE valid_orders AS
     SELECT
         "id",
         distributions_offer,
@@ -59,12 +59,38 @@ BEGIN
     FROM distributions_orders
     WHERE distributions_offer = distr_off_id AND quantity <> 0;
 
-    IF NOT EXISTS (SELECT 1 FROM validOrders) THEN
-        errorMsg := 'No distributions orders with quantity larger than 0 found for offer id ' || distr_off_id || '. Maybe you dont have access to this distribution, check your role and in which koops you have access.';
-        RAISE INFO '%', errorMsg;
-        INSERT INTO debug_output (level, message, data) VALUES ('error', errorMsg, NULL);
-        RETURN QUERY SELECT * FROM debug_output;
-        DROP TABLE IF EXISTS debug_output, validOrders, adjustedOrders, finalOrders, originOrders;
+    IF NOT EXISTS (SELECT 1 FROM valid_orders) THEN
+        debugMsgs := COALESCE(debugMsgs, '[]'::jsonb) || jsonb_build_array('Error: No distributions orders with quantity larger than 0 found for offer id ' || distr_off_id || '. Maybe you dont have access to this distribution, check your role and in which koops you have access.');
+        INSERT INTO distributions_orders_rounding
+            (
+                distributions_offer,
+                messages,
+                origin_offer,
+                origin_orders,
+                remain_diff,
+                target_total_quantity,
+                scale_factor,
+                adjusted_orders,
+                total_ordered,
+                total_adjusted,
+                time_taken_ms
+            )
+            VALUES (
+                distr_off_id, -- distributions_offer,
+                debugMsgs, -- messages,
+                NULL, -- origin_offer,
+                NULL, -- origin_orders,
+                NULL, -- remain_diff,
+                NULL, -- target_total_quantity,
+                NULL, -- scale_factor,
+                NULL, -- adjusted_orders,
+                NULL, -- total_ordered,
+                NULL, -- total_adjusted,
+                EXTRACT(EPOCH FROM(CLOCK_TIMESTAMP() - startTime)) * 1000 -- time_taken_ms
+            );
+
+        RETURN QUERY SELECT * FROM adjusted_orders;
+        DROP TABLE IF EXISTS valid_orders, adjusted_orders, final_orders, origin_orders;
         RETURN;
     END IF;
 
@@ -80,51 +106,177 @@ BEGIN
     FROM distributions_offers
     WHERE "id" = distr_off_id;
 
-    debugOffer := row_to_json(offerRecord);
-    IF debug THEN
-        RAISE INFO 'Origin Offer: %', debugOffer;
-    END IF;
-    INSERT INTO debug_output (level, message, data) VALUES ('info', 'originOffer', debugOffer);
+    debugOriginOffer := row_to_json(offerRecord);
 
     -- Check offer requirements setups
     IF offerRecord IS NULL THEN
-        errorMsg := 'No offer found with id ' || distr_off_id;
-        RAISE NOTICE '%', errorMsg;
-        INSERT INTO debug_output (level, message, data) VALUES ('error', errorMsg, NULL);
-        RETURN QUERY SELECT * FROM debug_output;
-        DROP TABLE IF EXISTS debug_output, validOrders, adjustedOrders, finalOrders, originOrders;
+        debugMsgs := COALESCE(debugMsgs, '[]'::jsonb) || jsonb_build_array('Error: No offer found with id ' || distr_off_id);
+        INSERT INTO distributions_orders_rounding
+            (
+                distributions_offer,
+                messages,
+                origin_offer,
+                origin_orders,
+                remain_diff,
+                target_total_quantity,
+                scale_factor,
+                adjusted_orders,
+                total_ordered,
+                total_adjusted,
+                time_taken_ms
+            )
+            VALUES (
+                distr_off_id, -- distributions_offer,
+                debugMsgs, -- messages,
+                NULL, -- origin_offer,
+                NULL, -- origin_orders,
+                NULL, -- remain_diff,
+                NULL, -- target_total_quantity,
+                NULL, -- scale_factor,
+                NULL, -- adjusted_orders,
+                NULL, -- total_ordered,
+                NULL, -- total_adjusted,
+                EXTRACT(EPOCH FROM(CLOCK_TIMESTAMP() - startTime)) * 1000 -- time_taken_ms
+            );
+
+        RETURN QUERY SELECT * FROM adjusted_orders;
+        DROP TABLE IF EXISTS valid_orders, adjusted_orders, final_orders, origin_orders;
         RETURN;
     END IF;
     IF offerRecord.step_size IS NULL THEN
-        errorMsg := 'step_size of offer with id ' || distr_off_id || ' is invalid';
-        RAISE NOTICE '%', errorMsg;
-        INSERT INTO debug_output (level, message, data) VALUES ('error', errorMsg, NULL);
-        RETURN QUERY SELECT * FROM debug_output;
-        DROP TABLE IF EXISTS debug_output, validOrders, adjustedOrders, finalOrders, originOrders;
+        debugMsgs := COALESCE(debugMsgs, '[]'::jsonb) || jsonb_build_array('Error: step_size of offer with id ' || distr_off_id || ' is invalid');
+        INSERT INTO distributions_orders_rounding
+            (
+                distributions_offer,
+                messages,
+                origin_offer,
+                origin_orders,
+                remain_diff,
+                target_total_quantity,
+                scale_factor,
+                adjusted_orders,
+                total_ordered,
+                total_adjusted,
+                time_taken_ms
+            )
+            VALUES (
+                distr_off_id, -- distributions_offer,
+                debugMsgs, -- messages,
+                debugOriginOffer, -- origin_offer,
+                NULL, -- origin_orders,
+                NULL, -- remain_diff,
+                NULL, -- target_total_quantity,
+                NULL, -- scale_factor,
+                NULL, -- adjusted_orders,
+                NULL, -- total_ordered,
+                NULL, -- total_adjusted,
+                EXTRACT(EPOCH FROM(CLOCK_TIMESTAMP() - startTime)) * 1000 -- time_taken_ms
+            );
+
+        RETURN QUERY SELECT * FROM adjusted_orders;
+        DROP TABLE IF EXISTS valid_orders, adjusted_orders, final_orders, origin_orders;
         RETURN;
     END IF;
     IF offerRecord.rounding_step_size IS NULL THEN
-        errorMsg := 'rounding_step_size of offer with id ' || distr_off_id || ' is invalid';
-        RAISE NOTICE '%', errorMsg;
-        INSERT INTO debug_output (level, message, data) VALUES ('error', errorMsg, NULL);
-        RETURN QUERY SELECT * FROM debug_output;
-        DROP TABLE IF EXISTS debug_output, validOrders, adjustedOrders, finalOrders, originOrders;
+        debugMsgs := COALESCE(debugMsgs, '[]'::jsonb) || jsonb_build_array('Error: rounding_step_size of offer with id ' || distr_off_id || ' is invalid');
+        INSERT INTO distributions_orders_rounding
+            (
+                distributions_offer,
+                messages,
+                origin_offer,
+                origin_orders,
+                remain_diff,
+                target_total_quantity,
+                scale_factor,
+                adjusted_orders,
+                total_ordered,
+                total_adjusted,
+                time_taken_ms
+            )
+            VALUES (
+                distr_off_id, -- distributions_offer,
+                debugMsgs, -- messages,
+                debugOriginOffer, -- origin_offer,
+                NULL, -- origin_orders,
+                NULL, -- remain_diff,
+                NULL, -- target_total_quantity,
+                NULL, -- scale_factor,
+                NULL, -- adjusted_orders,
+                NULL, -- total_ordered,
+                NULL, -- total_adjusted,
+                EXTRACT(EPOCH FROM(CLOCK_TIMESTAMP() - startTime)) * 1000 -- time_taken_ms
+            );
+
+        RETURN QUERY SELECT * FROM adjusted_orders;
+        DROP TABLE IF EXISTS valid_orders, adjusted_orders, final_orders, origin_orders;
         RETURN;
     END IF;
     IF offerRecord.unit_size IS NULL THEN
-        errorMsg := 'unit_size of offer with id ' || distr_off_id || ' is invalid';
-        RAISE NOTICE '%', errorMsg;
-        INSERT INTO debug_output (level, message, data) VALUES ('error', errorMsg, NULL);
-        RETURN QUERY SELECT * FROM debug_output;
-        DROP TABLE IF EXISTS debug_output, validOrders, adjustedOrders, finalOrders, originOrders;
+        debugMsgs := COALESCE(debugMsgs, '[]'::jsonb) || jsonb_build_array('Error: unit_size of offer with id ' || distr_off_id || ' is invalid');
+        INSERT INTO distributions_orders_rounding
+            (
+                distributions_offer,
+                messages,
+                origin_offer,
+                origin_orders,
+                remain_diff,
+                target_total_quantity,
+                scale_factor,
+                adjusted_orders,
+                total_ordered,
+                total_adjusted,
+                time_taken_ms
+            )
+            VALUES (
+                distr_off_id, -- distributions_offer,
+                debugMsgs, -- messages,
+                debugOriginOffer, -- origin_offer,
+                NULL, -- origin_orders,
+                NULL, -- remain_diff,
+                NULL, -- target_total_quantity,
+                NULL, -- scale_factor,
+                NULL, -- adjusted_orders,
+                NULL, -- total_ordered,
+                NULL, -- total_adjusted,
+                EXTRACT(EPOCH FROM(CLOCK_TIMESTAMP() - startTime)) * 1000 -- time_taken_ms
+            );
+
+        RETURN QUERY SELECT * FROM adjusted_orders;
+        DROP TABLE IF EXISTS valid_orders, adjusted_orders, final_orders, origin_orders;
         RETURN;
     END IF;
     IF offerRecord.unit_count IS NULL THEN
-        errorMsg := 'unit_count of offer with id ' || distr_off_id || ' is invalid';
-        RAISE NOTICE '%', errorMsg;
-        INSERT INTO debug_output (level, message, data) VALUES ('error', errorMsg, NULL);
-        RETURN QUERY SELECT * FROM debug_output;
-        DROP TABLE IF EXISTS debug_output, validOrders, adjustedOrders, finalOrders, originOrders;
+        debugMsgs := COALESCE(debugMsgs, '[]'::jsonb) || jsonb_build_array('Error: unit_count of offer with id ' || distr_off_id || ' is invalid');
+        INSERT INTO distributions_orders_rounding
+            (
+                distributions_offer,
+                messages,
+                origin_offer,
+                origin_orders,
+                remain_diff,
+                target_total_quantity,
+                scale_factor,
+                adjusted_orders,
+                total_ordered,
+                total_adjusted,
+                time_taken_ms
+            )
+            VALUES (
+                distr_off_id, -- distributions_offer,
+                debugMsgs, -- messages,
+                debugOriginOffer, -- origin_offer,
+                NULL, -- origin_orders,
+                NULL, -- remain_diff,
+                NULL, -- target_total_quantity,
+                NULL, -- scale_factor,
+                NULL, -- adjusted_orders,
+                NULL, -- total_ordered,
+                NULL, -- total_adjusted,
+                EXTRACT(EPOCH FROM(CLOCK_TIMESTAMP() - startTime)) * 1000 -- time_taken_ms
+            );
+
+        RETURN QUERY SELECT * FROM adjusted_orders;
+        DROP TABLE IF EXISTS valid_orders, adjusted_orders, final_orders, origin_orders;
         RETURN;
     END IF;
 
@@ -133,9 +285,7 @@ BEGIN
 
     -- Ensure step_size is not smaller than rounding_step_size
     IF offerRecord.step_size < offerRecord.rounding_step_size THEN
-        errorMsg := 'Rounding step size is larger than step size, setting rounding step size to step size.';
-        RAISE WARNING '%', errorMsg;
-        INSERT INTO debug_output (level, message, data) VALUES ('warning', errorMsg, NULL);
+        debugMsgs := COALESCE(debugMsgs, '[]'::jsonb) || jsonb_build_array('Warning: Rounding step size is larger than step size, setting rounding step size to step size.');
         roundingStepSize := offerRecord.step_size;
     END IF;
 
@@ -143,7 +293,7 @@ BEGIN
     unitTotalSize := offerRecord.unit_size * offerRecord.unit_count;
 
     -- Select all distributions orders before updating
-    CREATE TEMP TABLE originOrders AS
+    CREATE TEMP TABLE origin_orders AS
     SELECT
         "id",
         distributions_offer,
@@ -154,54 +304,68 @@ BEGIN
     FROM distributions_orders
     WHERE distributions_offer = distr_off_id;
 
-    debugOriginOrders := (SELECT json_agg(row_to_json(originOrders)) FROM originOrders);
-
-    -- Debugging output origin orders
-    IF debug THEN
-        RAISE INFO 'Origin: %', debugOriginOrders;
-    END IF;
-    INSERT INTO debug_output (level, message, data) VALUES ('info', 'originOrders', debugOriginOrders);
+    debugOriginOrders := (SELECT json_agg(row_to_json(origin_orders)) FROM origin_orders);
 
     -- Calculate total ordered quantity
-    SELECT SUM(COALESCE(NULLIF(quantity_adjusted, 0), quantity))
-    INTO totalOrderedQuantity
-    FROM validOrders;
+    SELECT SUM(
+        CASE
+            WHEN quantity_adjusted_locked THEN quantity_adjusted
+            ELSE quantity
+        END
+    ) INTO totalOrderedQuantity
+    FROM valid_orders;
 
     IF totalOrderedQuantity = 0 THEN
-        errorMsg := 'Total ordered quantity is 0, exit function.';
-        RAISE NOTICE '%', errorMsg;
-        INSERT INTO debug_output (level, message, data) VALUES ('error', errorMsg, NULL);
-        RETURN QUERY SELECT * FROM debug_output;
-        DROP TABLE IF EXISTS debug_output, validOrders, adjustedOrders, finalOrders, originOrders;
+        debugMsgs := COALESCE(debugMsgs, '[]'::jsonb) || jsonb_build_array('Error: Total ordered quantity is 0, exit function.');
+        INSERT INTO distributions_orders_rounding
+            (
+                distributions_offer,
+                messages,
+                origin_offer,
+                origin_orders,
+                remain_diff,
+                target_total_quantity,
+                scale_factor,
+                adjusted_orders,
+                total_ordered,
+                total_adjusted,
+                time_taken_ms
+            )
+            VALUES (
+                distr_off_id, -- distributions_offer,
+                debugMsgs, -- messages,
+                debugOriginOffer, -- origin_offer,
+                debugOriginOrders, -- origin_orders,
+                NULL, -- remain_diff,
+                NULL, -- target_total_quantity,
+                NULL, -- scale_factor,
+                NULL, -- adjusted_orders,
+                NULL, -- total_ordered,
+                NULL, -- total_adjusted,
+                EXTRACT(EPOCH FROM(CLOCK_TIMESTAMP() - startTime)) * 1000 -- time_taken_ms
+            );
+
+        RETURN QUERY SELECT * FROM adjusted_orders;
+        DROP TABLE IF EXISTS valid_orders, adjusted_orders, final_orders, origin_orders;
         RETURN;
     END IF;
 
     -- Calculate target total quantity considering total_amount_adjusted if available
     targetTotalQuantity := COALESCE(offerRecord.total_adjusted, ROUND(totalOrderedQuantity / unitTotalSize) * unitTotalSize);
-    IF debug THEN
-        errorMsg := 'Target Total Adjusted Quantity: ' || targetTotalQuantity;
-        RAISE INFO '%', errorMsg;
-        INSERT INTO debug_output (level, message, data) VALUES ('info', 'targetTotalAdjustedQuantity', to_jsonb(targetTotalQuantity));
-    END IF;
 
     -- Calculate scaling factor
     scaleFactor := targetTotalQuantity / totalOrderedQuantity;
-    IF debug THEN
-        errorMsg := 'Scale factor ' || scaleFactor;
-        RAISE INFO '%', errorMsg;
-        INSERT INTO debug_output (level, message, data) VALUES ('info', 'scaleFactor', to_jsonb(scaleFactor));
-    END IF;
 
     -- Initial adjustment of order quantities
-    CREATE TEMP TABLE adjustedOrders AS
-    SELECT * FROM validOrders;
+    INSERT INTO adjusted_orders
+    SELECT * FROM valid_orders;
 
-    FOR orderRecord IN SELECT * FROM validOrders LOOP
+    FOR orderRecord IN SELECT * FROM valid_orders LOOP
         IF NOT orderRecord.quantity_adjusted_locked THEN
             adjustedQuantity := orderRecord.quantity * scaleFactor;
-            adjustedQuantity := ROUND(adjustedQuantity / roundingStepSize, 3) * roundingStepSize;
+            adjustedQuantity := ROUND(adjustedQuantity / roundingStepSize) * roundingStepSize;
             adjustedQuantity := GREATEST(0, adjustedQuantity);
-            UPDATE adjustedOrders
+            UPDATE adjusted_orders
             SET quantity_adjusted = adjustedQuantity
             WHERE id = orderRecord.id;
         END IF;
@@ -210,29 +374,24 @@ BEGIN
     -- Calculate total quantity of adjusted orders
     SELECT SUM(COALESCE(quantity_adjusted, 0))
     INTO currentTotalAdjusted
-    FROM adjustedOrders;
+    FROM adjusted_orders;
 
     -- Calculate the remaining difference
     remainingDifference := targetTotalQuantity - currentTotalAdjusted;
-    IF debug THEN
-        errorMsg := 'Remaining difference: ' || remainingDifference;
-        RAISE INFO '%', errorMsg;
-        INSERT INTO debug_output (level, message, data) VALUES ('info', 'remainingDifference', to_jsonb(remainingDifference));
-    END IF;
 
     -- Get the count of non-locked orders
-    SELECT COUNT(*) INTO nonLockedOrderCount FROM adjustedOrders WHERE NOT quantity_adjusted_locked;
+    SELECT COUNT(*) INTO nonLockedOrderCount FROM adjusted_orders WHERE NOT quantity_adjusted_locked;
 
     -- Remaining diff is larger than 0 and has not locked orders
     IF remainingDifference <> 0 AND nonLockedOrderCount > 0 THEN
         remainingDiffStep := roundingStepSize * SIGN(remainingDifference);
-        remainingDiffSteps := ROUND(ABS(remainingDifference) / roundingStepSize, 3);
+        remainingDiffSteps := ROUND(ABS(remainingDifference) / roundingStepSize);
 
         -- Distribute the remaining difference across non-locked orders
         FOR remainingDiffPos IN 0..(remainingDiffSteps - 1) LOOP
-            UPDATE adjustedOrders
+            UPDATE adjusted_orders
             SET quantity_adjusted = quantity_adjusted + remainingDiffStep
-            WHERE id = (SELECT id FROM adjustedOrders WHERE NOT quantity_adjusted_locked OFFSET remainingDiffPos % nonLockedOrderCount LIMIT 1);
+            WHERE id = (SELECT id FROM adjusted_orders WHERE NOT quantity_adjusted_locked OFFSET remainingDiffPos % nonLockedOrderCount LIMIT 1);
         END LOOP;
 
         -- Calculate the index for the next non-locked order
@@ -244,18 +403,18 @@ BEGIN
         -- Recalculate the remaining difference
         SELECT targetTotalQuantity - SUM(COALESCE(quantity_adjusted, 0))
         INTO remainingDifference
-        FROM adjustedOrders;
+        FROM adjusted_orders;
 
         -- Adjust the first non-locked order if there is still a remaining difference
         IF remainingDifference <> 0 THEN
-            UPDATE adjustedOrders
+            UPDATE adjusted_orders
             SET quantity_adjusted = quantity_adjusted + remainingDifference
-            WHERE id = (SELECT id FROM adjustedOrders WHERE NOT quantity_adjusted_locked OFFSET remainingDiffPos LIMIT 1);
+            WHERE id = (SELECT id FROM adjusted_orders WHERE NOT quantity_adjusted_locked OFFSET remainingDiffPos LIMIT 1);
         END IF;
     END IF;
 
     -- Create a temporary table for final orders
-    CREATE TEMP TABLE finalOrders AS
+    CREATE TEMP TABLE final_orders AS
     SELECT
         "id",
         distributions_offer,
@@ -266,42 +425,30 @@ BEGIN
     FROM distributions_orders
     WHERE distributions_offer = distr_off_id;
 
-    -- Set finalOrders with the adjusted values from adjustedOrders
-    FOR finalOrder IN SELECT * FROM finalOrders LOOP
+    -- Set final_orders with the adjusted values from adjusted_orders
+    FOR finalOrder IN SELECT * FROM final_orders LOOP
         IF finalOrder.quantity = 0 THEN
-            UPDATE finalOrders
+            UPDATE final_orders
             SET quantity_adjusted = finalOrder.quantity
             WHERE id = finalOrder.id;
         ELSE
             SELECT *
             INTO adjustedOrder
-            FROM adjustedOrders
+            FROM adjusted_orders
             WHERE id = finalOrder.id;
 
             IF (adjustedOrder.quantity_adjusted IS NOT NULL AND adjustedOrder.quantity_adjusted < 0) THEN
-                errorMsg := 'Adjusted order id ' || adjustedOrder.id || ' is below zero (' || adjustedOrder.quantity_adjusted || ').';
-                RAISE WARNING '%', errorMsg;
-                INSERT INTO debug_output (level, message, data) VALUES ('error', 'roundingError', to_jsonb(errorMsg));
-                UPDATE finalOrders
+                debugMsgs := COALESCE(debugMsgs, '[]'::jsonb) || jsonb_build_array('Warning: Adjusted order id ' || adjustedOrder.id || ' is below zero (' || adjustedOrder.quantity_adjusted || ').');
+                UPDATE final_orders
                 SET quantity_adjusted = adjustedOrder.quantity_adjusted, rounding_error = 'quantity_adjusted_below_zero'
                 WHERE id = finalOrder.id;
             ELSE
-                UPDATE finalOrders
+                UPDATE final_orders
                 SET quantity_adjusted = COALESCE(adjustedOrder.quantity_adjusted, 0)
                 WHERE id = finalOrder.id;
             END IF;
         END IF;
     END LOOP;
-
-    -- Update distributions_orders with finalOrders
-    IF update_orders THEN
-        FOR finalOrder IN SELECT * FROM finalOrders LOOP
-            UPDATE distributions_orders
-            SET quantity_adjusted = finalOrder.quantity_adjusted,
-                rounding_error = finalOrder.rounding_error
-            WHERE id = finalOrder.id;
-        END LOOP;
-    END IF;
 
     -- Calculate total ordered quantity
     SELECT SUM(COALESCE(quantity, 0))
@@ -312,42 +459,49 @@ BEGIN
     -- Calculate total adjusted quantity
     SELECT SUM(COALESCE(quantity_adjusted, 0))
     INTO finalTotalAdjustedQuantity
-    FROM finalOrders;
+    FROM final_orders;
 
-    -- End time
-    endTime := CLOCK_TIMESTAMP();
-    timeDiff := endTime - startTime;
+    debugFinalOrders := (SELECT json_agg(row_to_json(final_orders)) FROM final_orders);
 
-    debugFinalOrders := (SELECT json_agg(row_to_json(finalOrders)) FROM finalOrders);
-    debugTotalOrderedQuantity := to_jsonb(finalTotalOrderedQuantity);
-    debugTotalAdjustedQuantity := to_jsonb(finalTotalAdjustedQuantity);
-    debugTimeTaken := to_jsonb(EXTRACT(EPOCH FROM timeDiff) * 1000);
+    INSERT INTO distributions_orders_rounding
+    (
+        distributions_offer,
+        messages,
+        origin_offer,
+        origin_orders,
+        remain_diff,
+        target_total_quantity,
+        scale_factor,
+        adjusted_orders,
+        total_ordered,
+        total_adjusted,
+        time_taken_ms
+    )
+    VALUES (
+        distr_off_id, -- distributions_offer,
+        debugMsgs, -- messages,
+        debugOriginOffer, -- origin_offer,
+        debugOriginOrders, -- origin_orders,
+        remainingDifference, -- remain_diff,
+        targetTotalQuantity, -- target_total_quantity,
+        scaleFactor, -- scale_factor,
+        debugFinalOrders, -- adjusted_orders,
+        finalTotalOrderedQuantity, -- total_ordered,
+        finalTotalAdjustedQuantity, -- total_adjusted,
+        EXTRACT(EPOCH FROM(CLOCK_TIMESTAMP() - startTime)) * 1000 -- time_taken_ms
+    );
 
-    -- Debugging output
-    IF debug THEN
-        RAISE INFO 'Adjusted: %', debugFinalOrders;
-        RAISE INFO 'Total ordered: %', finalTotalOrderedQuantity;
-        RAISE INFO 'Total adjusted: %', finalTotalAdjustedQuantity;
-        RAISE INFO 'Time taken: % milliseconds', debugTimeTaken;
-    END IF;
-
-    INSERT INTO debug_output (level, message, data) VALUES ('info', 'adjustedOrders', debugFinalOrders);
-    INSERT INTO debug_output (level, message, data) VALUES ('info', 'totalOrdered', debugTotalOrderedQuantity);
-    INSERT INTO debug_output (level, message, data) VALUES ('info', 'totalAdjusted', debugTotalAdjustedQuantity);
-    INSERT INTO debug_output (level, message, data) VALUES ('info', 'timeTakenMs', debugTimeTaken);
-
-    -- Return debug data
-    RETURN QUERY SELECT * FROM debug_output;
-    DROP TABLE IF EXISTS debug_output, validOrders, adjustedOrders, finalOrders, originOrders;
+    RETURN QUERY SELECT * FROM final_orders;
+    DROP TABLE IF EXISTS adjusted_orders, valid_orders, final_orders, origin_orders;
     RETURN;
 END;
 $$;
 
 SELECT * FROM distributions_orders ORDER BY id DESC LIMIT 100;
 
-SELECT total, total_adjusted FROM distributions_offers WHERE id = 13372;
+SELECT total, total_adjusted, cloned_offer->>'step_size' AS step_size, cloned_offer->>'rounding_step_size' AS rounding_step_size FROM distributions_offers WHERE id = 12532;
 
-UPDATE distributions_offers SET total_adjusted = NULL WHERE id = 13372;
-UPDATE distributions_offers SET total_adjusted = 20.0 WHERE id = 13372;
+UPDATE distributions_offers SET total_adjusted = NULL WHERE id = 12532;
+UPDATE distributions_offers SET total_adjusted = 20.0 WHERE id = 12532;
 
-SELECT kp__rounding_orders(12532, TRUE, FALSE);
+SELECT kp__rounding_orders(12532);
