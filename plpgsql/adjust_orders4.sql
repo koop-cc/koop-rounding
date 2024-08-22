@@ -36,6 +36,8 @@ DECLARE
     finalTotalOrderedQuantity NUMERIC;
     finalTotalAdjustedQuantity NUMERIC;
 BEGIN
+    RAISE LOG 'kp__rounding_orders(%)', distr_off_id;
+
     -- Start time
     startTime := CLOCK_TIMESTAMP();
 
@@ -58,7 +60,8 @@ BEGIN
         distributions_orders.basket,
         distributions_orders.quantity,
         distributions_orders.quantity_adjusted,
-        distributions_orders.quantity_adjusted_locked
+        distributions_orders.quantity_adjusted_locked,
+        distributions_orders.rounding_error
     FROM distributions_orders
     WHERE distributions_orders.distributions_offer = distr_off_id AND distributions_orders.quantity <> 0;
 
