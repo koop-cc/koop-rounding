@@ -3,7 +3,7 @@ DROP FUNCTION IF EXISTS kp__rounding_orders(bigint);
 CREATE OR REPLACE FUNCTION kp__rounding_orders(
     distr_off_id bigint
 ) RETURNS TABLE(
-    "id" bigint,
+    id bigint,
     distributions_offer bigint,
     basket bigint,
     quantity numeric,
@@ -43,7 +43,7 @@ BEGIN
 
     -- Result of the adjusted orders
     CREATE TEMP TABLE adjusted_orders(
-        "id" bigint,
+        id bigint,
         distributions_offer bigint,
         basket bigint,
         quantity numeric,
@@ -55,7 +55,7 @@ BEGIN
     -- Select all valid distributions orders without quantity 0 and create a temporary table
     CREATE TEMP TABLE valid_orders AS
     SELECT
-        distributions_orders."id",
+        distributions_orders.id,
         distributions_orders.distributions_offer,
         distributions_orders.basket,
         distributions_orders.quantity,
@@ -102,7 +102,7 @@ BEGIN
 
     -- Select the distribution offer details
     SELECT
-        distributions_offers."id",
+        distributions_offers.id,
         (distributions_offers.cloned_offer->>'unit_count')::NUMERIC AS unit_count,
         (distributions_offers.cloned_offer->>'unit_size')::NUMERIC AS unit_size,
         (distributions_offers.cloned_offer->>'step_size')::NUMERIC AS step_size,
@@ -110,7 +110,7 @@ BEGIN
         distributions_offers.total_adjusted
     INTO offerRecord
     FROM distributions_offers
-    WHERE distributions_offers."id" = distr_off_id;
+    WHERE distributions_offers.id = distr_off_id;
 
     debugOriginOffer := row_to_json(offerRecord);
 
@@ -302,7 +302,7 @@ BEGIN
     -- Select all distributions orders before updating
     CREATE TEMP TABLE origin_orders AS
     SELECT
-        distributions_orders."id",
+        distributions_orders.id,
         distributions_orders.distributions_offer,
         distributions_orders.basket,
         distributions_orders.quantity,
@@ -375,7 +375,7 @@ BEGIN
             adjustedQuantity := GREATEST(0, adjustedQuantity);
             UPDATE adjusted_orders
             SET quantity_adjusted = adjustedQuantity
-            WHERE adjusted_orders."id" = orderRecord."id";
+            WHERE adjusted_orders.id = orderRecord.id;
         END IF;
     END LOOP;
 
@@ -399,7 +399,7 @@ BEGIN
         FOR remainingDiffPos IN 0..(remainingDiffSteps - 1) LOOP
             UPDATE adjusted_orders
             SET quantity_adjusted = adjusted_orders.quantity_adjusted + remainingDiffStep
-            WHERE adjusted_orders."id" = (SELECT adjusted_orders."id" FROM adjusted_orders WHERE NOT adjusted_orders.quantity_adjusted_locked OFFSET remainingDiffPos % nonLockedOrderCount LIMIT 1);
+            WHERE adjusted_orders.id = (SELECT adjusted_orders.id FROM adjusted_orders WHERE NOT adjusted_orders.quantity_adjusted_locked OFFSET remainingDiffPos % nonLockedOrderCount LIMIT 1);
         END LOOP;
 
         -- Calculate the index for the next non-locked order
@@ -417,14 +417,14 @@ BEGIN
         IF remainingDifference <> 0 THEN
             UPDATE adjusted_orders
             SET quantity_adjusted = adjusted_orders.quantity_adjusted + remainingDifference
-            WHERE id = (SELECT adjusted_orders."id" FROM adjusted_orders WHERE NOT adjusted_orders.quantity_adjusted_locked OFFSET remainingDiffPos LIMIT 1);
+            WHERE adjusted_orders.id = (SELECT adjusted_orders.id FROM adjusted_orders WHERE NOT adjusted_orders.quantity_adjusted_locked OFFSET remainingDiffPos LIMIT 1);
         END IF;
     END IF;
 
     -- Create a temporary table for final orders
     CREATE TEMP TABLE final_orders AS
     SELECT
-        distributions_orders."id",
+        distributions_orders.id,
         distributions_orders.distributions_offer,
         distributions_orders.basket,
         distributions_orders.quantity,
@@ -450,7 +450,7 @@ BEGIN
                 debugMsgs := COALESCE(debugMsgs, '[]'::jsonb) || jsonb_build_array('Warning: Adjusted order id ' || adjustedOrder.id || ' is below zero (' || adjustedOrder.quantity_adjusted || ').');
                 UPDATE final_orders
                 SET quantity_adjusted = adjustedOrder.quantity_adjusted, rounding_error = 'quantity_adjusted_below_zero'
-                WHERE final_orders."id" = finalOrder."id";
+                WHERE final_orders.id = finalOrder.id;
             ELSE
                 UPDATE final_orders
                 SET quantity_adjusted = COALESCE(adjustedOrder.quantity_adjusted, 0)
