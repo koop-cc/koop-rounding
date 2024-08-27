@@ -9,7 +9,8 @@ CREATE OR REPLACE FUNCTION kp__rounding_orders(
     quantity numeric,
     quantity_adjusted numeric,
     quantity_adjusted_locked boolean,
-    rounding_error kp_enum_rounding_error
+    rounding_error kp_enum_rounding_error,
+    rounding_id bigint
 ) LANGUAGE plpgsql AS $$
 DECLARE
     debugMsgs JSONB;
@@ -35,6 +36,7 @@ DECLARE
     startTime TIMESTAMP;
     finalTotalOrderedQuantity NUMERIC;
     finalTotalAdjustedQuantity NUMERIC;
+    inserted_rounding_id bigint;
 BEGIN
     RAISE LOG 'kp__rounding_orders(%)', distr_off_id;
 
@@ -49,7 +51,8 @@ BEGIN
         quantity numeric,
         quantity_adjusted numeric,
         quantity_adjusted_locked boolean,
-        rounding_error kp_enum_rounding_error
+        rounding_error kp_enum_rounding_error,
+        rounding_id bigint
     );
 
     -- Select all valid distributions orders without quantity 0 and create a temporary table
@@ -61,7 +64,8 @@ BEGIN
         distributions_orders.quantity,
         distributions_orders.quantity_adjusted,
         distributions_orders.quantity_adjusted_locked,
-        distributions_orders.rounding_error
+        distributions_orders.rounding_error,
+        distributions_orders.rounding_id
     FROM distributions_orders
     WHERE distributions_orders.distributions_offer = distr_off_id AND distributions_orders.quantity <> 0;
 
@@ -69,29 +73,11 @@ BEGIN
         debugMsgs := COALESCE(debugMsgs, '[]'::jsonb) || jsonb_build_array('Error: No distributions orders with quantity larger than 0 found for offer id ' || distr_off_id || '. Maybe you dont have access to this distribution, check your role and in which koops you have access.');
         INSERT INTO distributions_orders_rounding
             (
-                distributions_offer,
                 messages,
-                origin_offer,
-                origin_orders,
-                remain_diff,
-                target_total_quantity,
-                scale_factor,
-                adjusted_orders,
-                total_ordered,
-                total_adjusted,
                 time_taken_ms
             )
             VALUES (
-                NULL, -- distributions_offer,
                 debugMsgs, -- messages,
-                NULL, -- origin_offer,
-                NULL, -- origin_orders,
-                NULL, -- remain_diff,
-                NULL, -- target_total_quantity,
-                NULL, -- scale_factor,
-                NULL, -- adjusted_orders,
-                NULL, -- total_ordered,
-                NULL, -- total_adjusted,
                 EXTRACT(EPOCH FROM(CLOCK_TIMESTAMP() - startTime)) * 1000 -- time_taken_ms
             );
 
@@ -308,7 +294,8 @@ BEGIN
         distributions_orders.quantity,
         distributions_orders.quantity_adjusted,
         distributions_orders.quantity_adjusted_locked,
-        distributions_orders.rounding_error
+        distributions_orders.rounding_error,
+        distributions_orders.rounding_id
     FROM distributions_orders
     WHERE distributions_orders.distributions_offer = distr_off_id;
 
@@ -430,7 +417,8 @@ BEGIN
         distributions_orders.quantity,
         distributions_orders.quantity_adjusted,
         distributions_orders.quantity_adjusted_locked,
-        distributions_orders.rounding_error
+        distributions_orders.rounding_error,
+        distributions_orders.rounding_id
     FROM distributions_orders
     WHERE distributions_orders.distributions_offer = distr_off_id;
 
@@ -498,7 +486,12 @@ BEGIN
         finalTotalOrderedQuantity, -- total_ordered,
         finalTotalAdjustedQuantity, -- total_adjusted,
         EXTRACT(EPOCH FROM(CLOCK_TIMESTAMP() - startTime)) * 1000 -- time_taken_ms
-    );
+    )
+    RETURNING distributions_orders_rounding.id INTO inserted_rounding_id;
+
+    -- Set rounding_id in final_orders
+    UPDATE final_orders
+    SET rounding_id = inserted_rounding_id;
 
     RETURN QUERY SELECT * FROM final_orders;
     DROP TABLE IF EXISTS adjusted_orders, valid_orders, final_orders, origin_orders;
