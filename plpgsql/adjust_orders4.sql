@@ -108,27 +108,11 @@ BEGIN
             (
                 distributions_offer,
                 messages,
-                origin_offer,
-                origin_orders,
-                remain_diff,
-                target_total_quantity,
-                scale_factor,
-                adjusted_orders,
-                total_ordered,
-                total_adjusted,
                 time_taken_ms
             )
             VALUES (
                 distr_off_id, -- distributions_offer,
                 debugMsgs, -- messages,
-                NULL, -- origin_offer,
-                NULL, -- origin_orders,
-                NULL, -- remain_diff,
-                NULL, -- target_total_quantity,
-                NULL, -- scale_factor,
-                NULL, -- adjusted_orders,
-                NULL, -- total_ordered,
-                NULL, -- total_adjusted,
                 EXTRACT(EPOCH FROM(CLOCK_TIMESTAMP() - startTime)) * 1000 -- time_taken_ms
             );
 
@@ -143,26 +127,12 @@ BEGIN
                 distributions_offer,
                 messages,
                 origin_offer,
-                origin_orders,
-                remain_diff,
-                target_total_quantity,
-                scale_factor,
-                adjusted_orders,
-                total_ordered,
-                total_adjusted,
                 time_taken_ms
             )
             VALUES (
                 distr_off_id, -- distributions_offer,
                 debugMsgs, -- messages,
                 debugOriginOffer, -- origin_offer,
-                NULL, -- origin_orders,
-                NULL, -- remain_diff,
-                NULL, -- target_total_quantity,
-                NULL, -- scale_factor,
-                NULL, -- adjusted_orders,
-                NULL, -- total_ordered,
-                NULL, -- total_adjusted,
                 EXTRACT(EPOCH FROM(CLOCK_TIMESTAMP() - startTime)) * 1000 -- time_taken_ms
             );
 
@@ -177,26 +147,12 @@ BEGIN
                 distributions_offer,
                 messages,
                 origin_offer,
-                origin_orders,
-                remain_diff,
-                target_total_quantity,
-                scale_factor,
-                adjusted_orders,
-                total_ordered,
-                total_adjusted,
                 time_taken_ms
             )
             VALUES (
                 distr_off_id, -- distributions_offer,
                 debugMsgs, -- messages,
                 debugOriginOffer, -- origin_offer,
-                NULL, -- origin_orders,
-                NULL, -- remain_diff,
-                NULL, -- target_total_quantity,
-                NULL, -- scale_factor,
-                NULL, -- adjusted_orders,
-                NULL, -- total_ordered,
-                NULL, -- total_adjusted,
                 EXTRACT(EPOCH FROM(CLOCK_TIMESTAMP() - startTime)) * 1000 -- time_taken_ms
             );
 
@@ -211,26 +167,12 @@ BEGIN
                 distributions_offer,
                 messages,
                 origin_offer,
-                origin_orders,
-                remain_diff,
-                target_total_quantity,
-                scale_factor,
-                adjusted_orders,
-                total_ordered,
-                total_adjusted,
                 time_taken_ms
             )
             VALUES (
                 distr_off_id, -- distributions_offer,
                 debugMsgs, -- messages,
                 debugOriginOffer, -- origin_offer,
-                NULL, -- origin_orders,
-                NULL, -- remain_diff,
-                NULL, -- target_total_quantity,
-                NULL, -- scale_factor,
-                NULL, -- adjusted_orders,
-                NULL, -- total_ordered,
-                NULL, -- total_adjusted,
                 EXTRACT(EPOCH FROM(CLOCK_TIMESTAMP() - startTime)) * 1000 -- time_taken_ms
             );
 
@@ -246,26 +188,12 @@ BEGIN
                 distributions_offer,
                 messages,
                 origin_offer,
-                origin_orders,
-                remain_diff,
-                target_total_quantity,
-                scale_factor,
-                adjusted_orders,
-                total_ordered,
-                total_adjusted,
                 time_taken_ms
             )
             VALUES (
                 distr_off_id, -- distributions_offer,
                 debugMsgs, -- messages,
                 debugOriginOffer, -- origin_offer,
-                NULL, -- origin_orders,
-                NULL, -- remain_diff,
-                NULL, -- target_total_quantity,
-                NULL, -- scale_factor,
-                NULL, -- adjusted_orders,
-                NULL, -- total_ordered,
-                NULL, -- total_adjusted,
                 EXTRACT(EPOCH FROM(CLOCK_TIMESTAMP() - startTime)) * 1000 -- time_taken_ms
             );
 
