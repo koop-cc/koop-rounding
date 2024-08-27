@@ -93,7 +93,8 @@ BEGIN
         (distributions_offers.cloned_offer->>'unit_size')::NUMERIC AS unit_size,
         (distributions_offers.cloned_offer->>'step_size')::NUMERIC AS step_size,
         (distributions_offers.cloned_offer->>'rounding_step_size')::NUMERIC AS rounding_step_size,
-        distributions_offers.total_adjusted
+        distributions_offers.total_adjusted,
+        distributions_offers.total_adjusted_locked,
     INTO offerRecord
     FROM distributions_offers
     WHERE distributions_offers.id = distr_off_id;
@@ -318,12 +319,6 @@ BEGIN
                 messages,
                 origin_offer,
                 origin_orders,
-                remain_diff,
-                target_total_quantity,
-                scale_factor,
-                adjusted_orders,
-                total_ordered,
-                total_adjusted,
                 time_taken_ms
             )
             VALUES (
@@ -331,12 +326,6 @@ BEGIN
                 debugMsgs, -- messages,
                 debugOriginOffer, -- origin_offer,
                 debugOriginOrders, -- origin_orders,
-                NULL, -- remain_diff,
-                NULL, -- target_total_quantity,
-                NULL, -- scale_factor,
-                NULL, -- adjusted_orders,
-                NULL, -- total_ordered,
-                NULL, -- total_adjusted,
                 EXTRACT(EPOCH FROM(CLOCK_TIMESTAMP() - startTime)) * 1000 -- time_taken_ms
             );
 
@@ -345,8 +334,37 @@ BEGIN
         RETURN;
     END IF;
 
-    -- Calculate target total quantity considering total_adjusted if available
-    targetTotalQuantity := COALESCE(offerRecord.total_adjusted, ROUND(totalOrderedQuantity / unitTotalSize) * unitTotalSize);
+    -- Calculate target total quantity
+    IF offerRecord.total_adjusted_locked THEN
+        -- Warn if total_adjusted is null
+        IF offerRecord.total_adjusted IS NULL THEN
+            targetTotalQuantity := ROUND(totalOrderedQuantity / unitTotalSize) * unitTotalSize
+            debugMsgs := COALESCE(debugMsgs, '[]'::jsonb) || jsonb_build_array('Warning: total_adjusted_locked is true but total_adjusted is null. We round to the next full size and use that value.');
+            INSERT INTO distributions_orders_rounding
+                (
+                    distributions_offer,
+                    messages,
+                    origin_offer,
+                    origin_orders,
+                    total_adjusted,
+                    time_taken_ms
+                )
+                VALUES (
+                    distr_off_id, -- distributions_offer,
+                    debugMsgs, -- messages,
+                    debugOriginOffer, -- origin_offer,
+                    debugOriginOrders, -- origin_orders,
+                    targetTotalQuantity, -- total_adjusted,
+                    EXTRACT(EPOCH FROM(CLOCK_TIMESTAMP() - startTime)) * 1000 -- time_taken_ms
+                );
+
+        ELSE
+            targetTotalQuantity := offerRecord.total_adjusted;
+        END IF;
+    ELSE
+        -- Set target total to the next full size
+        targetTotalQuantity := ROUND(totalOrderedQuantity / unitTotalSize) * unitTotalSize;
+    END IF;
 
     -- Calculate scaling factor
     scaleFactor := targetTotalQuantity / totalOrderedQuantity;
