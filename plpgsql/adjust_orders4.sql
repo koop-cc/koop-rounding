@@ -94,7 +94,7 @@ BEGIN
         (distributions_offers.cloned_offer->>'step_size')::NUMERIC AS step_size,
         (distributions_offers.cloned_offer->>'rounding_step_size')::NUMERIC AS rounding_step_size,
         distributions_offers.total_adjusted,
-        distributions_offers.total_adjusted_locked,
+        distributions_offers.total_adjusted_locked
     INTO offerRecord
     FROM distributions_offers
     WHERE distributions_offers.id = distr_off_id;
@@ -266,7 +266,7 @@ BEGIN
     IF offerRecord.total_adjusted_locked THEN
         -- Warn if total_adjusted is null
         IF offerRecord.total_adjusted IS NULL THEN
-            targetTotalQuantity := ROUND(totalOrderedQuantity / unitTotalSize) * unitTotalSize
+            targetTotalQuantity := ROUND(totalOrderedQuantity / unitTotalSize) * unitTotalSize;
             debugMsgs := COALESCE(debugMsgs, '[]'::jsonb) || jsonb_build_array('Warning: total_adjusted_locked is true but total_adjusted is null. We round to the next full size and use that value.');
             INSERT INTO distributions_orders_rounding
                 (
@@ -285,7 +285,6 @@ BEGIN
                     targetTotalQuantity, -- total_adjusted,
                     EXTRACT(EPOCH FROM(CLOCK_TIMESTAMP() - startTime)) * 1000 -- time_taken_ms
                 );
-
         ELSE
             targetTotalQuantity := offerRecord.total_adjusted;
         END IF;
