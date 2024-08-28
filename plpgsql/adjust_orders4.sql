@@ -28,6 +28,7 @@ DECLARE
     currentTotalAdjusted NUMERIC := 0;
     remainingDifference NUMERIC;
     nonLockedOrderCount INTEGER;
+    sumLockedOrderQuantityAdjusted NUMERIC;
     remainingDiffStep NUMERIC;
     remainingDiffSteps INTEGER;
     remainingDiffPos INTEGER;
@@ -98,6 +99,13 @@ BEGIN
     INTO offerRecord
     FROM distributions_offers
     WHERE distributions_offers.id = distr_off_id;
+
+    -- Reset rounding_error
+    UPDATE distributions_offers
+    SET
+        rounding_error = NULL
+    WHERE
+        distributions_offers.id = distr_off_id;
 
     debugOriginOffer := row_to_json(offerRecord);
 
@@ -268,23 +276,6 @@ BEGIN
         IF offerRecord.total_adjusted IS NULL THEN
             targetTotalQuantity := ROUND(totalOrderedQuantity / unitTotalSize) * unitTotalSize;
             debugMsgs := COALESCE(debugMsgs, '[]'::jsonb) || jsonb_build_array('Warning: total_adjusted_locked is true but total_adjusted is null. We round to the next full size and use that value.');
-            INSERT INTO distributions_orders_rounding
-                (
-                    distributions_offer,
-                    messages,
-                    origin_offer,
-                    origin_orders,
-                    total_adjusted,
-                    time_taken_ms
-                )
-                VALUES (
-                    distr_off_id, -- distributions_offer,
-                    debugMsgs, -- messages,
-                    debugOriginOffer, -- origin_offer,
-                    debugOriginOrders, -- origin_orders,
-                    targetTotalQuantity, -- total_adjusted,
-                    EXTRACT(EPOCH FROM(CLOCK_TIMESTAMP() - startTime)) * 1000 -- time_taken_ms
-                );
         ELSE
             targetTotalQuantity := offerRecord.total_adjusted;
         END IF;
@@ -367,11 +358,34 @@ BEGIN
     FROM distributions_orders
     WHERE distributions_orders.distributions_offer = distr_off_id;
 
+    -- Sum of quantity adjusted of all locked orders
+    SELECT SUM(COALESCE(final_orders.quantity_adjusted, 0))
+    INTO sumLockedOrderQuantityAdjusted
+    FROM final_orders
+    WHERE final_orders.quantity_adjusted_locked = true;
+
     -- Set final_orders with the adjusted values from adjusted_orders
     FOR finalOrder IN SELECT * FROM final_orders LOOP
+        -- Reset rounding_error
+        UPDATE final_orders
+        SET
+            rounding_error = NULL
+        WHERE final_orders.id = finalOrder.id;
+
+        -- Detect if locked orders need to release lock because targetTotalQuantity is below sum of all locked orders
+        IF targetTotalQuantity < sumLockedOrderQuantityAdjusted AND finalOrder.quantity_adjusted_locked = true THEN
+            debugMsgs := COALESCE(debugMsgs, '[]'::jsonb) || jsonb_build_array('Warning: order id ' || finalOrder.id || ' should release quantity_adjusted_locked because sum of all locked order quantity_adjusted is larger than total_adjusted of offer.');
+            UPDATE final_orders
+            SET
+                rounding_error = 'release_quantity_adjusted_locked'
+            WHERE final_orders.id = finalOrder.id;
+        END IF;
+
+        -- Copy quantity if quantity is 0
         IF finalOrder.quantity = 0 THEN
             UPDATE final_orders
-            SET quantity_adjusted = finalOrder.quantity
+            SET
+                quantity_adjusted = finalOrder.quantity
             WHERE final_orders.id = finalOrder.id;
         ELSE
             SELECT *
@@ -382,26 +396,27 @@ BEGIN
             IF (adjustedOrder.quantity_adjusted IS NOT NULL AND adjustedOrder.quantity_adjusted < 0) THEN
                 debugMsgs := COALESCE(debugMsgs, '[]'::jsonb) || jsonb_build_array('Warning: Adjusted order id ' || adjustedOrder.id || ' is below zero (' || adjustedOrder.quantity_adjusted || ').');
                 UPDATE final_orders
-                SET quantity_adjusted = adjustedOrder.quantity_adjusted, rounding_error = 'quantity_adjusted_below_zero'
+                SET
+                    quantity_adjusted = 0,
+                    rounding_error = 'quantity_adjusted_below_zero'
                 WHERE final_orders.id = finalOrder.id;
             ELSE
                 UPDATE final_orders
-                SET quantity_adjusted = COALESCE(adjustedOrder.quantity_adjusted, 0)
+                SET
+                    quantity_adjusted = COALESCE(adjustedOrder.quantity_adjusted, 0)
                 WHERE final_orders.id = finalOrder.id;
             END IF;
         END IF;
     END LOOP;
 
-    -- Calculate total ordered quantity
-    SELECT SUM(COALESCE(distributions_orders.quantity, 0))
-    INTO finalTotalOrderedQuantity
-    FROM distributions_orders
-    WHERE distributions_orders.distributions_offer = distr_off_id;
-
-    -- Calculate total adjusted quantity
-    SELECT SUM(COALESCE(final_orders.quantity_adjusted, 0))
-    INTO finalTotalAdjustedQuantity
-    FROM final_orders;
+    -- Set error in distributions_offers
+    IF targetTotalQuantity < sumLockedOrderQuantityAdjusted THEN
+        UPDATE distributions_offers
+        SET
+            rounding_error = 'release_quantity_adjusted_locked'
+        WHERE
+            distributions_offers.id = distr_off_id;
+    END IF;
 
     debugFinalOrders := (SELECT json_agg(row_to_json(final_orders)) FROM final_orders);
 
