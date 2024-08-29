@@ -56,6 +56,27 @@ BEGIN
         rounding_id bigint
     );
 
+    -- Dont update distributions_offers if distribution is in archive state
+    IF EXISTS (
+            SELECT 1 FROM distributions_offers
+            JOIN distributions ON distributions.id = distributions_offers.distribution
+            WHERE distributions_offers.id = distr_off_id AND distributions.state = 'archived'
+        ) THEN
+        debugMsgs := COALESCE(debugMsgs, '[]'::jsonb) || jsonb_build_array('Error: The offer id ' || distr_off_id || ' and related distribution is in archive state.');
+        INSERT INTO distributions_orders_rounding
+            (
+                messages,
+                time_taken_ms
+            )
+            VALUES (
+                debugMsgs, -- messages,
+                EXTRACT(EPOCH FROM(CLOCK_TIMESTAMP() - startTime)) * 1000 -- time_taken_ms
+            );
+        RETURN QUERY SELECT * FROM adjusted_orders;
+        DROP TABLE IF EXISTS valid_orders, adjusted_orders, final_orders, origin_orders;
+        RETURN;
+    END IF;
+
     -- Select all valid distributions orders without quantity 0 and create a temporary table
     CREATE TEMP TABLE valid_orders AS
     SELECT
